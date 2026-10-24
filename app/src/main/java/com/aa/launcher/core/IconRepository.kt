@@ -1,12 +1,15 @@
 package com.aa.launcher.core
 
+import android.content.ComponentCallbacks2
 import android.content.Context
+import android.graphics.Bitmap
 import android.content.pm.ShortcutInfo
 import android.util.LruCache
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.aa.launcher.LauncherApp
@@ -53,7 +56,7 @@ class IconRepository(private val context: Context, private val apps: AppReposito
             ?: runCatching { context.packageManager.getApplicationIcon(component.packageName) }.getOrNull()
             ?: return@withContext null
         val bitmap = runCatching {
-            IconRenderer.render(drawable.mutate(), spec.style, spec.shape, spec.sizePx, spec.tint, fromPack).asImageBitmap()
+            IconRenderer.render(drawable.mutate(), spec.style, spec.shape, spec.sizePx, spec.tint, fromPack).toGpu().asImageBitmap()
         }.getOrNull() ?: return@withContext null
         cache.put(k, bitmap)
         bitmap
@@ -64,16 +67,51 @@ class IconRepository(private val context: Context, private val apps: AppReposito
         cache.get(k)?.let { return@withContext it }
         val drawable = apps.shortcutIcon(info) ?: return@withContext null
         val bitmap = runCatching {
-            IconRenderer.render(drawable.mutate(), spec.style, spec.shape, spec.sizePx, spec.tint, false).asImageBitmap()
+            IconRenderer.render(drawable.mutate(), spec.style, spec.shape, spec.sizePx, spec.tint, false).toGpu().asImageBitmap()
         }.getOrNull() ?: return@withContext null
         cache.put(k, bitmap)
         bitmap
     }
 
+    /**
+     * 描画済みアイコンを GPU 上の HARDWARE ビットマップへ移す。
+     * Java ヒープを使わず、描画のたびのテクスチャ転送も不要になる (表示品質は同じ)。
+     */
+    private fun Bitmap.toGpu(): Bitmap {
+        val hw = runCatching { copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: return this
+        recycle()
+        return hw
+    }
+
+    /** すべて作り直す (アイコンパックの変更など)。 */
     fun invalidate() {
         cache.evictAll()
         packs.clear()
         _version.value++
+    }
+
+    /** 指定パッケージのアイコンだけ作り直す (更新・インストール時)。他のアイコンはキャッシュを使い続ける。 */
+    fun invalidatePackage(packageName: String) {
+        val prefixes = listOf("$packageName/", "shortcut:$packageName/")
+        val stale = cache.snapshot().keys.filter { key -> prefixes.any { key.startsWith(it) } }
+        if (stale.isEmpty()) return
+        stale.forEach { cache.remove(it) }
+        _version.value++
+    }
+
+    /** App ショートカットのアイコンだけ破棄する (次にメニューを開いたときに読み直す)。 */
+    fun invalidateShortcuts(packageName: String) {
+        val prefix = "shortcut:$packageName/"
+        cache.snapshot().keys.filter { it.startsWith(prefix) }.forEach { cache.remove(it) }
+    }
+
+    /** メモリ逼迫時に呼ぶ。表示中のアイコンは Compose 側が保持しているので、キャッシュだけ縮める。 */
+    fun trimMemory(level: Int) {
+        when {
+            level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> cache.evictAll()
+            level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE -> cache.trimToSize(cache.maxSize() / 2)
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> cache.trimToSize(cache.maxSize() / 2)
+        }
     }
 
     private companion object {
@@ -81,12 +119,21 @@ class IconRepository(private val context: Context, private val apps: AppReposito
     }
 }
 
+/**
+ * アイコンキャッシュの世代。画面のルートで 1 回だけ購読して配る
+ * (アイコンごとに Flow を購読しないようにするため)。
+ */
+val LocalIconVersion = compositionLocalOf { 0 }
+
 @Composable
 fun rememberAppIcon(appId: String, spec: IconSpec): ImageBitmap? {
     val repo = LauncherApp.instance.iconRepository
-    val version by repo.version.collectAsState()
-    val state = produceState(initialValue = repo.peek(appId, spec), appId, spec, version) {
-        value = repo.peek(appId, spec) ?: repo.load(appId, spec)
+    val version = LocalIconVersion.current
+    // 初回はキャッシュから同期的に取得 (毎回の再コンポーズで探し直さない)。
+    // キーが変わっても読み込み完了までは前の画像を表示し続けるので、ちらつかない。
+    val state = remember(appId) { mutableStateOf(repo.peek(appId, spec)) }
+    LaunchedEffect(appId, spec, version) {
+        state.value = repo.peek(appId, spec) ?: repo.load(appId, spec)
     }
     return state.value
 }

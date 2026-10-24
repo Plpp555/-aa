@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +78,7 @@ import com.aa.launcher.core.HomeItem
 import com.aa.launcher.core.HomeLayout
 import com.aa.launcher.core.HomePage
 import com.aa.launcher.core.LayoutOps
+import com.aa.launcher.core.LocalIconVersion
 import com.aa.launcher.core.WallpaperState
 import com.aa.launcher.core.WidgetItem
 import com.aa.launcher.core.WidgetTarget
@@ -115,6 +117,7 @@ fun LauncherScreen(vm: LauncherViewModel) {
     val apps by vm.appsById.collectAsStateWithLifecycle()
     val wallpaper by vm.wallpaper.collectAsStateWithLifecycle()
     val badges by vm.badges.collectAsStateWithLifecycle()
+    val iconVersion by vm.app.iconRepository.version.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LauncherTheme(settings) {
@@ -128,12 +131,13 @@ fun LauncherScreen(vm: LauncherViewModel) {
             wallpaperTint = Color(wallpaper.averageColor),
         )
         CompositionLocalProvider(
-            LocalBackdrop provides wallpaper.blurred,
+            LocalBackdrop provides wallpaper.backdrop,
             LocalScreenSize provides screen,
             LocalGlassParams provides glass,
             LocalWallpaperColor provides wallpaper.averageColor,
             LocalApps provides apps,
             LocalBadges provides badges,
+            LocalIconVersion provides iconVersion,
         ) {
             BackHandler(enabled = true) { vm.onBack() }
             Box(
@@ -187,7 +191,7 @@ private fun Modifier.dragTracking(vm: LauncherViewModel, onEnd: () -> Unit): Mod
 
 @Composable
 private fun WallpaperLayer(state: WallpaperState, settings: LauncherSettings, dark: Boolean) {
-    val image = if (settings.blurHomeWallpaper) state.blurred ?: state.image else state.image
+    val image = if (settings.blurHomeWallpaper) state.backdrop?.heavy ?: state.image else state.image
     if (image != null) {
         Image(
             bitmap = image,
@@ -321,11 +325,16 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
             key = { index -> pagesState.value.getOrNull(index)?.key ?: index },
         ) { index ->
             val page = pages.getOrNull(index) ?: return@HorizontalPager
+            // 見えているページ (スクロール中は隣のページも) だけ定期処理を動かす
+            val active by remember(index) {
+                derivedStateOf { abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - index) < 1f }
+            }
             Box(
                 Modifier
                     .fillMaxSize()
                     .pageEffect(pagerState, index, settings.pageEffect),
             ) {
+                CompositionLocalProvider(LocalContentActive provides active) {
                 when (page) {
                     PageModel.Today -> TodayPage(vm, Modifier.fillMaxSize())
                     PageModel.Library -> AppLibraryPage(vm, Modifier.fillMaxSize())
@@ -355,6 +364,7 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
                             ),
                         )
                     }
+                }
                 }
             }
         }
@@ -413,7 +423,8 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
 
 /** ページめくり効果 (スライド / 奥行き / キューブ / フェード)。 */
 private fun Modifier.pageEffect(state: PagerState, index: Int, effect: PageEffect): Modifier =
-    if (effect == PageEffect.SLIDE) this else graphicsLayer {
+    // スライドでも各ページを独立したレイヤーにして、スクロール中はページの再描画なしに位置だけ動かす
+    if (effect == PageEffect.SLIDE) graphicsLayer() else graphicsLayer {
         val position = -((state.currentPage - index) + state.currentPageOffsetFraction)
         when (effect) {
             PageEffect.DEPTH -> {

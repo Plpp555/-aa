@@ -143,11 +143,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         performGesture(GestureType.HOME_BUTTON, context)
     }
 
+    /** 他のアプリへ移ったとき。iOS と同様に編集モードも終え、揺れアニメーションを止める。 */
     fun onStop() {
         contextMenu = null
         spotlightOpen = false
         controlCenterOpen = false
         if (drag.active) cancelDrag()
+        if (editMode) exitEditMode()
+        todayEditMode = false
     }
 
     // ---- 編集モード ----------------------------------------------------------

@@ -6,36 +6,40 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.GlobalPositionAwareModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
+import com.aa.launcher.core.Backdrop
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
-/** Liquid Glass の表示パラメータ。iOS 27 の「クリア ↔ 色付き」スライダーを opacity で表す。 */
+/** Liquid Glass の表示パラメータ。iOS 27 の「クリア ↔ 色合い」スライダーを opacity で表す。 */
 data class GlassParams(
     val dark: Boolean = false,
     val opacity: Float = 0.3f,
@@ -44,10 +48,12 @@ data class GlassParams(
     val wallpaperTint: Color = Color.Unspecified,
 )
 
-/** 画面全体サイズにスケールして描くぼかし済み壁紙。 */
-val LocalBackdrop = compositionLocalOf<ImageBitmap?> { null }
+val LocalBackdrop = compositionLocalOf<Backdrop?> { null }
 val LocalScreenSize = compositionLocalOf { IntSize(1, 1) }
 val LocalGlassParams = compositionLocalOf { GlassParams() }
+
+/** この strength 以上は文字を載せるパネル (メニュー・シートなど)。読みやすさのため最低限の不透明度を保つ。 */
+private const val TEXT_PANEL_STRENGTH = 1.4f
 
 fun Outline.toPath(): Path = when (this) {
     is Outline.Rectangle -> Path().apply { addRect(rect) }
@@ -55,75 +61,222 @@ fun Outline.toPath(): Path = when (this) {
     is Outline.Generic -> path
 }
 
+/**
+ * スライダー値 → フィルの効き具合。既定値 (0.3) では従来と同じ見た目になり、
+ * 0 に近づくほど急速に透明になるよう、べき乗カーブで割り当てる。
+ */
+private fun opacityCurve(opacity: Float): Float = opacity.coerceIn(0f, 1f).pow(0.745f)
+
+/** 強ぼかし背景の混ぜ具合。既定値以上では従来どおり強いぼかし、クリア側では弱いぼかしだけになる。 */
+private fun heavyBlurMix(opacity: Float, strength: Float): Float =
+    if (strength >= TEXT_PANEL_STRENGTH) 1f else (opacity / 0.25f).coerceIn(0f, 1f)
+
 fun glassFill(params: GlassParams, tint: Color = Color.Unspecified, strength: Float = 1f): Color {
     if (params.reduceTransparency) return if (params.dark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
     val base = if (params.dark) Color.Black else Color.White
-    val minA = if (params.dark) 0.14f else 0.16f
+    val minA = if (params.dark) 0.06f else 0.04f
     val maxA = if (params.dark) 0.78f else 0.82f
-    val alpha = (lerp(minA, maxA, params.opacity) * strength).coerceIn(0f, 0.95f)
+    var alpha = lerp(minA, maxA, opacityCurve(params.opacity)) * strength
+    if (strength >= TEXT_PANEL_STRENGTH) alpha = alpha.coerceAtLeast(if (params.dark) 0.45f else 0.40f)
     val c = when {
         tint.isSpecified -> lerp(base, tint, 0.45f)
         params.wallpaperTint.isSpecified && params.opacity > 0.5f -> lerp(base, params.wallpaperTint, 0.12f)
         else -> base
     }
-    return c.copy(alpha = alpha)
+    return c.copy(alpha = alpha.coerceIn(0f, 0.95f))
 }
 
 /**
  * Liquid Glass 風の素材を背景に描く。
- * - 背後の壁紙をぼかして写し込む (ランチャーが壁紙を保持している場合)
- * - 透明度スライダーに応じた白/黒のフィル
- * - 上部のハイライトと、光の当たる縁 (スペキュラーリム)
+ * - 背後の壁紙を写し込む (クリア寄り: 弱ぼかし / 色合い寄り: 強ぼかし を連続的に混ぜる)
+ * - 透明度スライダーに応じた白/黒のフィル、上部のハイライト、縁の光 (スペキュラーリム)
+ *
+ * 性能面:
+ * - Modifier.Node 実装で、位置が変わったときだけ再描画する (静止中は一切再計算しない)
+ * - パスやブラシはサイズが変わるまでキャッシュする
+ * - ガラス自身と中身をそれぞれ独立したレイヤーにし、中身 (時計の文字など) の更新でガラスを描き直さず、
+ *   ガラスの位置更新 (スクロール中) で中身を描き直さない
  */
+@Composable
 fun Modifier.liquidGlass(
     shape: Shape,
     tint: Color = Color.Unspecified,
     strength: Float = 1f,
     rim: Boolean = true,
-): Modifier = composed {
-    val backdrop = LocalBackdrop.current
-    val screen = LocalScreenSize.current
-    val params = LocalGlassParams.current
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    this
-        .onGloballyPositioned { origin = it.positionInRoot() }
-        .drawWithCache {
-            val path = shape.createOutline(size, layoutDirection, this).toPath()
-            val fill = glassFill(params, tint, strength)
-            val rimWidth = (if (params.increaseContrast) 1.5.dp else 1.dp).toPx()
-            val rimBrush = if (params.increaseContrast) {
-                Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.White.copy(alpha = 0.45f)))
-            } else {
-                Brush.linearGradient(
-                    0f to Color.White.copy(alpha = if (params.dark) 0.38f else 0.75f),
-                    0.45f to Color.White.copy(alpha = 0.06f),
-                    1f to Color.White.copy(alpha = if (params.dark) 0.18f else 0.35f),
-                    start = Offset.Zero,
-                    end = Offset(size.width, size.height),
-                )
-            }
-            val sheen = Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = if (params.dark) 0.07f else 0.16f), Color.Transparent),
+): Modifier {
+    val element = LiquidGlassElement(
+        shape = shape,
+        tint = tint,
+        strength = strength,
+        rim = rim,
+        backdrop = LocalBackdrop.current,
+        screen = LocalScreenSize.current,
+        params = LocalGlassParams.current,
+    )
+    return this
+        .graphicsLayer()
+        .then(element)
+        .graphicsLayer()
+}
+
+private data class LiquidGlassElement(
+    val shape: Shape,
+    val tint: Color,
+    val strength: Float,
+    val rim: Boolean,
+    val backdrop: Backdrop?,
+    val screen: IntSize,
+    val params: GlassParams,
+) : ModifierNodeElement<LiquidGlassNode>() {
+    override fun create() = LiquidGlassNode(shape, tint, strength, rim, backdrop, screen, params)
+
+    override fun update(node: LiquidGlassNode) = node.update(shape, tint, strength, rim, backdrop, screen, params)
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "liquidGlass"
+    }
+}
+
+private class LiquidGlassNode(
+    var shape: Shape,
+    var tint: Color,
+    var strength: Float,
+    var rim: Boolean,
+    var backdrop: Backdrop?,
+    var screen: IntSize,
+    var params: GlassParams,
+) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode {
+
+    private var origin = Offset.Zero
+
+    // サイズ・方向・パラメータが変わるまで使い回すキャッシュ
+    private var cacheSize = Size.Unspecified
+    private var cacheDirection: LayoutDirection? = null
+    private var cacheDensity = 0f
+    private var cacheValid = false
+    private var path = Path()
+    private var fill = Color.Transparent
+    private var rimBrush: Brush? = null
+    private var rimWidth = 1f
+    private var sheen: Brush? = null
+    private var innerGlow: Brush? = null
+    private var innerGlowWidth = 0f
+    private var heavyMix = 1f
+
+    fun update(
+        shape: Shape,
+        tint: Color,
+        strength: Float,
+        rim: Boolean,
+        backdrop: Backdrop?,
+        screen: IntSize,
+        params: GlassParams,
+    ) {
+        this.shape = shape
+        this.tint = tint
+        this.strength = strength
+        this.rim = rim
+        this.backdrop = backdrop
+        this.screen = screen
+        this.params = params
+        cacheValid = false
+        invalidateDraw()
+    }
+
+    override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
+        val p = coordinates.positionInRoot()
+        if (p != origin) {
+            origin = p
+            // 背景を写し込むときだけ位置に依存する
+            if (backdrop != null && !params.reduceTransparency) invalidateDraw()
+        }
+    }
+
+    private fun ContentDrawScope.ensureCache() {
+        if (cacheValid && cacheSize == size && cacheDirection == layoutDirection && cacheDensity == density) return
+        cacheSize = size
+        cacheDirection = layoutDirection
+        cacheDensity = density
+        cacheValid = true
+
+        path = shape.createOutline(size, layoutDirection, this).toPath()
+        fill = glassFill(params, tint, strength)
+        heavyMix = heavyBlurMix(params.opacity, strength)
+        val p = params
+        // 既定値 (0.3) で従来と同じ強さ、クリア側では控えめにする
+        val emphasis = 0.4f + 0.6f * (p.opacity / 0.3f).coerceIn(0f, 1f)
+        rimWidth = (if (p.increaseContrast) 1.5.dp else 1.dp).toPx()
+        rimBrush = if (p.increaseContrast) {
+            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.White.copy(alpha = 0.45f)))
+        } else {
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = if (p.dark) 0.38f else 0.75f),
+                0.45f to Color.White.copy(alpha = 0.06f),
+                1f to Color.White.copy(alpha = if (p.dark) 0.18f else 0.35f),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height),
+            )
+        }
+        sheen = if (p.reduceTransparency) {
+            null
+        } else {
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = (if (p.dark) 0.07f else 0.16f) * emphasis), Color.Transparent),
                 endY = size.height * 0.55f,
             )
-            onDrawBehind {
-                clipPath(path) {
-                    if (backdrop != null && !params.reduceTransparency) {
-                        drawImage(
-                            image = backdrop,
-                            srcOffset = IntOffset.Zero,
-                            srcSize = IntSize(backdrop.width, backdrop.height),
-                            dstOffset = IntOffset(-origin.x.roundToInt(), -origin.y.roundToInt()),
-                            dstSize = screen,
-                            filterQuality = FilterQuality.Low,
-                        )
-                    }
-                    drawRect(fill)
-                    if (!params.reduceTransparency) drawRect(sheen)
-                }
-                if (rim) drawPath(path, rimBrush, style = Stroke(width = rimWidth))
-            }
         }
+        // ガラスの厚みを感じさせる内側の光 (透明にしても輪郭が分かるように、クリア側でやや強める)
+        val clearness = 1f - (p.opacity / 0.3f).coerceIn(0f, 1f)
+        innerGlowWidth = 6.dp.toPx()
+        innerGlow = if (p.reduceTransparency) {
+            null
+        } else {
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = 0.10f + 0.08f * clearness),
+                0.5f to Color.Transparent,
+                1f to Color.White.copy(alpha = 0.04f + 0.06f * clearness),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height),
+            )
+        }
+    }
+
+    override fun ContentDrawScope.draw() {
+        ensureCache()
+        val bd = backdrop
+        val reduce = params.reduceTransparency
+        clipPath(path) {
+            if (bd != null && !reduce) {
+                val dst = IntOffset(-origin.x.roundToInt(), -origin.y.roundToInt())
+                if (heavyMix < 0.999f) {
+                    drawImage(
+                        image = bd.light,
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(bd.light.width, bd.light.height),
+                        dstOffset = dst,
+                        dstSize = screen,
+                        filterQuality = FilterQuality.Medium,
+                    )
+                }
+                if (heavyMix > 0.001f) {
+                    drawImage(
+                        image = bd.heavy,
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(bd.heavy.width, bd.heavy.height),
+                        dstOffset = dst,
+                        dstSize = screen,
+                        alpha = heavyMix,
+                        filterQuality = FilterQuality.Medium,
+                    )
+                }
+            }
+            drawRect(fill)
+            sheen?.let { drawRect(it) }
+            innerGlow?.let { drawPath(path, it, style = Stroke(width = innerGlowWidth)) }
+        }
+        if (rim) rimBrush?.let { drawPath(path, it, style = Stroke(width = rimWidth)) }
+        drawContent()
+    }
 }
 
 @Composable

@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -13,11 +14,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.aa.launcher.core.FrameRateController
 import com.aa.launcher.core.WidgetHostManager
 import com.aa.launcher.ui.home.ContextMenuState
 import com.aa.launcher.ui.home.LauncherActions
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
     private val vm: LauncherViewModel by viewModels()
     private lateinit var widgetHost: WidgetHostManager
+    private lateinit var frameRate: FrameRateController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
@@ -44,6 +48,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         widgetHost = WidgetHostManager(this)
         vm.widgetHost = widgetHost
+        frameRate = FrameRateController(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
 
         setContent {
@@ -66,6 +71,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // 編集モードの揺れ (継続アニメーション) の間は最高リフレッシュレートを保つ
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                snapshotFlow { vm.editMode || vm.drag.active }
+                    .combine(vm.settings) { animating, s -> animating && s.wiggleInEditMode && !s.reduceMotion }
+                    .distinctUntilChanged()
+                    .collect { frameRate.hold(it) }
+            }
+        }
+
         // 壁紙・ステータスバーの表示をウィンドウに反映
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -83,8 +98,9 @@ class MainActivity : ComponentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         } else {
+            // ランチャーが不透明な壁紙を全面に描くので、ウィンドウ背景とシステム壁紙の合成を省く (重ね塗りの削減)
             window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-            window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
+            window.setBackgroundDrawable(null)
         }
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         if (showStatusBar) controller.show(WindowInsetsCompat.Type.statusBars()) else controller.hide(WindowInsetsCompat.Type.statusBars())
@@ -101,10 +117,18 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         widgetHost.stopListening()
         vm.onStop()
+        frameRate.reset()
+        launcherApp.settingsRepository.flush()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        frameRate.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        frameRate.pulse()
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             val broughtToFront = intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT != 0
             val alreadyOnHome = hasWindowFocus() && !broughtToFront

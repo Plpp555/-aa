@@ -72,13 +72,22 @@ class LauncherApp : Application() {
             }
         }
 
-        // パッケージ更新・アイコン設定変更でアイコンキャッシュを破棄
+        // パッケージ更新では、そのパッケージのアイコンだけ作り直す (全アイコンの再描画を避ける)
         appScope.launch {
-            appRepository.changeVersion.collect { iconRepository.invalidate() }
+            appRepository.packageChanges.collect { iconRepository.invalidatePackage(it) }
         }
+        appScope.launch {
+            appRepository.shortcutChanges.collect { iconRepository.invalidateShortcuts(it) }
+        }
+        // アイコンパックの変更ではすべて作り直す
         appScope.launch {
             settings.map { it.iconPack }.distinctUntilChanged().collect { iconRepository.invalidate() }
         }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (::iconRepository.isInitialized) iconRepository.trimMemory(level)
     }
 
     companion object {

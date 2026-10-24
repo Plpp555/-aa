@@ -19,3 +19,9 @@ val LocalLauncherActions = compositionLocalOf {
 }
 
 val LocalWidgetHost = staticCompositionLocalOf<WidgetHostManager?> { null }
+
+/**
+ * このコンテンツが今表示されているか (ページャーの表示中/隣接して見えているページ)。
+ * false のときウィジェットの時計やバッテリー監視などの定期処理を止める。
+ */
+val LocalContentActive = compositionLocalOf { true }

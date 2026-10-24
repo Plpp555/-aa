@@ -20,7 +20,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -39,22 +42,31 @@ class AppRepository(private val context: Context, private val scope: CoroutineSc
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
-    /** パッケージやショートカットが変化するたびに増える (アイコンキャッシュ破棄用)。 */
-    private val _changeVersion = MutableStateFlow(0)
-    val changeVersion: StateFlow<Int> = _changeVersion.asStateFlow()
+    /** 更新・追加・削除されたパッケージ名 (そのパッケージのアイコンだけ作り直すため)。 */
+    private val _packageChanges = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val packageChanges: SharedFlow<String> = _packageChanges.asSharedFlow()
+
+    /** App ショートカットが変わったパッケージ名 (ショートカットのアイコンだけ破棄する。App アイコンは作り直さない)。 */
+    private val _shortcutChanges = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val shortcutChanges: SharedFlow<String> = _shortcutChanges.asSharedFlow()
 
     private var reloadJob: Job? = null
 
+    private fun changed(vararg packageNames: String) {
+        packageNames.forEach { _packageChanges.tryEmit(it) }
+        reload()
+    }
+
     private val callback = object : LauncherApps.Callback() {
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = reload()
-        override fun onPackageAdded(packageName: String, user: UserHandle) = reload()
-        override fun onPackageChanged(packageName: String, user: UserHandle) = reload()
-        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
-        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
-        override fun onPackagesSuspended(packageNames: Array<out String>, user: UserHandle) = reload()
-        override fun onPackagesUnsuspended(packageNames: Array<out String>, user: UserHandle) = reload()
+        override fun onPackageRemoved(packageName: String, user: UserHandle) = changed(packageName)
+        override fun onPackageAdded(packageName: String, user: UserHandle) = changed(packageName)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = changed(packageName)
+        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(*packageNames)
+        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = changed(*packageNames)
+        override fun onPackagesSuspended(packageNames: Array<out String>, user: UserHandle) = changed(*packageNames)
+        override fun onPackagesUnsuspended(packageNames: Array<out String>, user: UserHandle) = changed(*packageNames)
         override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<ShortcutInfo>, user: UserHandle) {
-            _changeVersion.value++
+            _shortcutChanges.tryEmit(packageName)
         }
     }
 
@@ -72,7 +84,6 @@ class AppRepository(private val context: Context, private val scope: CoroutineSc
             if (list != null) {
                 _apps.value = list
                 _loaded.value = true
-                _changeVersion.value++
             }
         }
     }

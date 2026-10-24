@@ -9,7 +9,6 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
@@ -19,6 +18,7 @@ import android.os.Build
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
 import com.aa.launcher.settings.IconShape
+import kotlin.math.sqrt
 
 /** 実際に描画するスタイル (Automatic などを解決したもの)。 */
 enum class RenderStyle { DEFAULT, DARK, TINTED, CLEAR_LIGHT, CLEAR_DARK }
@@ -27,10 +27,19 @@ enum class RenderStyle { DEFAULT, DARK, TINTED, CLEAR_LIGHT, CLEAR_DARK }
  * Android のアイコンを iOS 風に描画する。
  * - スーパー楕円でマスク
  * - ダーク / 色合い (Tinted) / クリア の各スタイル (iOS 18 / 26 / 27)
+ *
+ * ダーク・色合い・クリアでは、App がモノクロアイコン (Android 13+) を持っていればそれを使い、
+ * なければ [glyphMask] でアイコンから記号部分を抽出する。抽出は「背景色との色差」と
+ * 「前景レイヤーの形」を組み合わせるので、黒い記号・背景レイヤー側に描かれた絵柄・
+ * カラフルなロゴでも消えない (以前は輝度だけを使っていたため、暗い記号の App が消えていた)。
  */
 object IconRenderer {
 
     private fun newPaint() = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+    /** 前景レイヤーを「記号」とみなせる覆い率の範囲 (全面の絵柄や空のレイヤーは除く)。 */
+    private const val MIN_GLYPH_COVERAGE = 0.02f
+    private const val MAX_GLYPH_COVERAGE = 0.75f
 
     fun render(drawable: Drawable, style: RenderStyle, shape: IconShape, size: Int, tint: Int, fromIconPack: Boolean): Bitmap {
         val out = createBitmap(size, size)
@@ -54,51 +63,53 @@ object IconRenderer {
         val paint = newPaint()
         val bg = d.background
         val fg = d.foreground
+        if (style == RenderStyle.DEFAULT) {
+            bg?.drawIn(canvas, bounds)
+            fg?.drawIn(canvas, bounds)
+            return
+        }
+
         val mono = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) d.monochrome?.mutate() else null
+        val monoLayer = mono?.let { layerBitmap(it, bounds, size) }?.takeIf { stats(it).coverage >= MIN_GLYPH_COVERAGE / 2 }
+        val fgLayer = fg?.let { layerBitmap(it, bounds, size) }
+        val bgColor = bg?.let { averageColor(it, bounds) }
+        // 記号の抽出は必要になったときだけ (モノクロアイコンがあれば不要)
+        val glyph by lazy {
+            val full = createBitmap(size, size)
+            val c = Canvas(full)
+            bg?.drawIn(c, bounds)
+            fg?.drawIn(c, bounds)
+            glyphMask(full, fgLayer, reference = null)
+        }
+
         when (style) {
-            RenderStyle.DEFAULT -> {
-                bg?.drawIn(canvas, bounds)
-                fg?.drawIn(canvas, bounds)
-            }
             RenderStyle.DARK -> {
                 drawDarkPlate(canvas, size)
-                val bgColor = bg?.let { averageColor(it, bounds) } ?: Color.WHITE
-                if (fg != null) {
-                    val layer = layerBitmap(fg, bounds, size)
-                    if (isMostlyLight(layer)) {
-                        // 白いグリフは元の背景色で着色 (iOS のダークアイコン風)
-                        val glyphColor = brighten(bgColor)
-                        paint.colorFilter = PorterDuffColorFilter(glyphColor, PorterDuff.Mode.SRC_IN)
-                        canvas.drawBitmap(layer, 0f, 0f, paint)
-                        paint.colorFilter = null
-                    } else {
-                        canvas.drawBitmap(layer, 0f, 0f, paint)
+                val accent = brighten(bgColor ?: Color.WHITE)
+                when {
+                    monoLayer != null -> drawColored(canvas, monoLayer, accent, paint)
+                    fgLayer != null -> {
+                        val s = stats(fgLayer)
+                        when {
+                            // 前景が暗い・空・全面の絵柄で記号が分からない → 抽出した記号を明るい色で
+                            s.coverage < MIN_GLYPH_COVERAGE || s.meanLuminance < 0.3f -> drawColored(canvas, glyph, accent, paint)
+                            // 白い記号は元の背景色で着色 (iOS のダークアイコン風)
+                            s.coverage <= MAX_GLYPH_COVERAGE && s.lightRatio >= 0.8f -> drawColored(canvas, fgLayer, accent, paint)
+                            else -> canvas.drawBitmap(fgLayer, 0f, 0f, paint)
+                        }
                     }
+                    else -> drawColored(canvas, glyph, accent, paint)
                 }
             }
             RenderStyle.TINTED -> {
                 drawTintPlate(canvas, size, tint)
-                if (mono != null) {
-                    mono.colorFilter = PorterDuffColorFilter(brighten(tint), PorterDuff.Mode.SRC_IN)
-                    mono.drawIn(canvas, bounds)
-                    mono.colorFilter = null
-                } else if (fg != null) {
-                    val layer = layerBitmap(fg, bounds, size)
-                    paint.colorFilter = luminanceTint(tint)
-                    canvas.drawBitmap(layer, 0f, 0f, paint)
-                    paint.colorFilter = null
-                }
+                drawColored(canvas, monoLayer ?: glyph, brighten(tint), paint)
             }
             RenderStyle.CLEAR_LIGHT, RenderStyle.CLEAR_DARK -> {
                 val glyphColor = if (style == RenderStyle.CLEAR_LIGHT) Color.WHITE else 0xFFF2F2F7.toInt()
-                if (mono != null) {
-                    mono.colorFilter = PorterDuffColorFilter(glyphColor, PorterDuff.Mode.SRC_IN)
-                    mono.drawIn(canvas, bounds)
-                    mono.colorFilter = null
-                } else if (fg != null) {
-                    canvas.drawBitmap(luminanceAlpha(layerBitmap(fg, bounds, size), glyphColor), 0f, 0f, paint)
-                }
+                drawColored(canvas, monoLayer ?: glyph, glyphColor, paint)
             }
+            RenderStyle.DEFAULT -> Unit
         }
     }
 
@@ -120,20 +131,152 @@ object IconRenderer {
                 drawDarkPlate(canvas, size)
                 if (fullBleed) {
                     paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(0.62f, 0.62f, 0.62f, 1f) })
+                    canvas.drawBitmap(full, null, target, paint)
+                    paint.colorFilter = null
+                } else if (stats(full).meanLuminance < 0.3f) {
+                    // 透明背景の暗いロゴは暗い下地で見えなくなるので、記号として明るく描く
+                    drawColored(canvas, glyphMask(full, null, reference = null), 0xFFE5E5EA.toInt(), paint, target)
+                } else {
+                    canvas.drawBitmap(full, null, target, paint)
                 }
-                canvas.drawBitmap(full, null, target, paint)
-                paint.colorFilter = null
             }
             RenderStyle.TINTED -> {
                 drawTintPlate(canvas, size, tint)
-                paint.colorFilter = luminanceTint(tint)
-                canvas.drawBitmap(full, null, target, paint)
-                paint.colorFilter = null
+                drawColored(canvas, glyphMask(full, null, reference = null), brighten(tint), paint, target)
             }
             RenderStyle.CLEAR_LIGHT, RenderStyle.CLEAR_DARK -> {
-                canvas.drawBitmap(luminanceAlpha(full, Color.WHITE), null, target, paint)
+                val glyphColor = if (style == RenderStyle.CLEAR_LIGHT) Color.WHITE else 0xFFF2F2F7.toInt()
+                drawColored(canvas, glyphMask(full, null, reference = null), glyphColor, paint, target)
             }
         }
+    }
+
+    /** アルファで形を持つビットマップを単色で塗る。 */
+    private fun drawColored(canvas: Canvas, src: Bitmap, color: Int, paint: Paint, target: RectF? = null) {
+        paint.colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN)
+        if (target == null) canvas.drawBitmap(src, 0f, 0f, paint) else canvas.drawBitmap(src, null, target, paint)
+        paint.colorFilter = null
+    }
+
+    private class LayerStats(val coverage: Float, val meanLuminance: Float, val lightRatio: Float)
+
+    /** 不透明部分の覆い率・平均輝度・明るい画素の割合。 */
+    private fun stats(bmp: Bitmap): LayerStats {
+        val small = Bitmap.createScaledBitmap(bmp, 24, 24, true)
+        var opaque = 0
+        var light = 0
+        var lumSum = 0.0
+        for (x in 0 until 24) for (y in 0 until 24) {
+            val px = small.getPixel(x, y)
+            if (Color.alpha(px) < 100) continue
+            opaque++
+            val l = ColorUtils.calculateLuminance(px or 0xFF000000.toInt())
+            lumSum += l
+            if (l > 0.75) light++
+        }
+        if (opaque == 0) return LayerStats(0f, 0f, 0f)
+        return LayerStats(opaque / 576f, (lumSum / opaque).toFloat(), light.toFloat() / opaque)
+    }
+
+    /**
+     * アイコンから白いグリフ (アルファに形を持つ) を作る。
+     * - 背景色 (縁の画素の中央値) との色差を画素ごとに求め、98 パーセンタイルで正規化する
+     * - 前景レイヤーが記号らしい覆い率なら、その形も重ねる
+     * - 背景が透明なアイコンは、形 (アルファ) に明るさの陰影を付けたものにする
+     * - どれでも空に近ければ、アイコンの形そのものを半透明で使う (絶対に消えない)
+     */
+    private fun glyphMask(full: Bitmap, fgLayer: Bitmap?, reference: Int?): Bitmap {
+        val w = full.width
+        val h = full.height
+        val n = w * h
+        val px = IntArray(n)
+        full.getPixels(px, 0, w, 0, 0, w, h)
+        val fgPx = fgLayer?.let { layer -> IntArray(n).also { layer.getPixels(it, 0, w, 0, 0, w, h) } }
+
+        val ref = reference ?: edgeColor(px, w, h)
+        val refTransparent = Color.alpha(ref) < 128
+        val rr = Color.red(ref)
+        val rg = Color.green(ref)
+        val rb = Color.blue(ref)
+
+        val diff = FloatArray(n)
+        val histogram = IntArray(101)
+        var counted = 0
+        for (i in 0 until n) {
+            val c = px[i]
+            val a = Color.alpha(c) / 255f
+            if (a <= 0.01f) continue
+            val r = Color.red(c)
+            val g = Color.green(c)
+            val b = Color.blue(c)
+            val d = if (refTransparent) {
+                a * (0.6f + 0.4f * ((0.299f * r + 0.587f * g + 0.114f * b) / 255f))
+            } else {
+                val dr = (r - rr).toFloat()
+                val dg = (g - rg).toFloat()
+                val db = (b - rb).toFloat()
+                a * (sqrt(0.30f * dr * dr + 0.59f * dg * dg + 0.11f * db * db) / 255f)
+            }
+            diff[i] = d
+            histogram[(d * 100f).toInt().coerceIn(0, 100)]++
+            counted++
+        }
+        // 98 パーセンタイル (一部の強いハイライトに引っ張られないように)
+        var p98 = 1f
+        if (counted > 0) {
+            var acc = 0
+            val limit = counted * 0.98f
+            for (k in 0..100) {
+                acc += histogram[k]
+                if (acc >= limit) {
+                    p98 = k / 100f
+                    break
+                }
+            }
+        }
+        val norm = p98.coerceAtLeast(0.12f)
+
+        var fgCoverage = 0
+        if (fgPx != null) for (c in fgPx) if (Color.alpha(c) > 128) fgCoverage++
+        val useFg = fgPx != null && fgCoverage >= n * MIN_GLYPH_COVERAGE && fgCoverage <= n * MAX_GLYPH_COVERAGE
+
+        val out = IntArray(n)
+        var total = 0f
+        for (i in 0 until n) {
+            var a = (diff[i] / norm).coerceIn(0f, 1f)
+            if (useFg) a = maxOf(a, Color.alpha(fgPx!![i]) / 255f * 0.9f)
+            total += a
+            out[i] = ((a * 255f).toInt() shl 24) or 0x00FFFFFF
+        }
+        if (total < n * 0.01f) {
+            // 単色のアイコンなど: 形そのものを使う
+            for (i in 0 until n) out[i] = (((Color.alpha(px[i]) * 0.55f).toInt()) shl 24) or 0x00FFFFFF
+        }
+        return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    /** 縁 (外周 3〜9%) の画素の中央値。背景色の推定に使う。 */
+    private fun edgeColor(px: IntArray, w: Int, h: Int): Int {
+        val a = ArrayList<Int>()
+        val r = ArrayList<Int>()
+        val g = ArrayList<Int>()
+        val b = ArrayList<Int>()
+        val lo = (w * 0.03f).toInt()
+        val hi = (w * 0.09f).toInt().coerceAtLeast(lo + 1)
+        val step = (w / 48).coerceAtLeast(1)
+        fun sample(x: Int, y: Int) {
+            val c = px[y.coerceIn(0, h - 1) * w + x.coerceIn(0, w - 1)]
+            a += Color.alpha(c); r += Color.red(c); g += Color.green(c); b += Color.blue(c)
+        }
+        for (t in lo until hi) {
+            var i = 0
+            while (i < w) {
+                sample(i, t); sample(i, h - 1 - t); sample(t, i); sample(w - 1 - t, i)
+                i += step
+            }
+        }
+        fun median(list: ArrayList<Int>) = list.sorted()[list.size / 2]
+        return Color.argb(median(a), median(r), median(g), median(b))
     }
 
     private fun Drawable.drawIn(canvas: Canvas, bounds: Rect) {
@@ -163,46 +306,6 @@ object IconRenderer {
         canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), p)
     }
 
-    /** 輝度に応じて tint 色で塗る ColorFilter (iOS の Tinted アイコン)。 */
-    private fun luminanceTint(tint: Int): ColorMatrixColorFilter {
-        val t = brighten(tint)
-        val r = Color.red(t) / 255f
-        val g = Color.green(t) / 255f
-        val b = Color.blue(t) / 255f
-        return ColorMatrixColorFilter(
-            ColorMatrix(
-                floatArrayOf(
-                    r * 0.299f, r * 0.587f, r * 0.114f, 0f, 0f,
-                    g * 0.299f, g * 0.587f, g * 0.114f, 0f, 0f,
-                    b * 0.299f, b * 0.587f, b * 0.114f, 0f, 0f,
-                    0f, 0f, 0f, 1f, 0f,
-                ),
-            ),
-        )
-    }
-
-    /** 輝度をアルファに変換した単色グリフを作る (クリアアイコン)。 */
-    private fun luminanceAlpha(src: Bitmap, color: Int): Bitmap {
-        val out = createBitmap(src.width, src.height)
-        val c = Canvas(out)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.colorFilter = ColorMatrixColorFilter(
-            ColorMatrix(
-                floatArrayOf(
-                    0f, 0f, 0f, 0f, Color.red(color).toFloat(),
-                    0f, 0f, 0f, 0f, Color.green(color).toFloat(),
-                    0f, 0f, 0f, 0f, Color.blue(color).toFloat(),
-                    0.299f, 0.587f, 0.114f, 0f, 0f,
-                ),
-            ),
-        )
-        c.drawBitmap(src, 0f, 0f, p)
-        // 元のアルファでマスク
-        val mask = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
-        c.drawBitmap(src, 0f, 0f, mask)
-        return out
-    }
-
     private fun averageColor(d: Drawable, bounds: Rect): Int {
         val bmp = createBitmap(8, 8)
         val c = Canvas(bmp)
@@ -217,18 +320,6 @@ object IconRenderer {
         }
         if (n == 0L) return Color.WHITE
         return Color.rgb((r / n).toInt(), (g / n).toInt(), (b / n).toInt())
-    }
-
-    private fun isMostlyLight(bmp: Bitmap): Boolean {
-        val small = Bitmap.createScaledBitmap(bmp, 16, 16, true)
-        var light = 0; var total = 0
-        for (x in 0 until 16) for (y in 0 until 16) {
-            val px = small.getPixel(x, y)
-            if (Color.alpha(px) < 100) continue
-            total++
-            if (ColorUtils.calculateLuminance(px) > 0.75) light++
-        }
-        return total > 0 && light >= total * 0.8
     }
 
     private fun isFullBleed(bmp: Bitmap): Boolean {

@@ -165,11 +165,19 @@ object BuiltinWallpapers {
     }
 }
 
+/**
+ * Liquid Glass の下地にする壁紙 (画面サイズにスケールして描く)。
+ * - [light]: 画面の 1/2 解像度・弱いぼかし。クリア寄りのときに背景がはっきり、かつ粗くならずに見える
+ * - [heavy]: 画面の 1/4 解像度・強いぼかし。色合い寄りのとき、および文字を載せるパネルで使う
+ * どちらも GPU 上の HARDWARE ビットマップ (Java ヒープを消費しない)。
+ */
+data class Backdrop(val light: ImageBitmap, val heavy: ImageBitmap)
+
 data class WallpaperState(
     /** ランチャー自身が描く壁紙。null の場合はシステム壁紙をウィンドウ越しに表示する。 */
     val image: ImageBitmap? = null,
-    /** ガラス素材用のぼかし済み背景。 */
-    val blurred: ImageBitmap? = null,
+    /** ガラス素材用のぼかし済み背景。読めない場合 (Android 13+ のシステム壁紙など) は null。 */
+    val backdrop: Backdrop? = null,
     val averageColor: Int = 0xFF3A3A3C.toInt(),
     val isDark: Boolean = true,
 )
@@ -231,29 +239,36 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
                 val wm = WallpaperManager.getInstance(context)
                 // Android 13 以降は権限がないと読めないことが多い。その場合はぼかし無しのガラスになる。
                 val drawable = runCatching { wm.drawable }.getOrNull()
-                val bmp = drawable?.let { d -> runCatching { centerCrop(d.toBitmap(), w / 4, h / 4) }.getOrNull() }
+                val bmp = drawable?.let { d -> runCatching { centerCrop(d.toBitmap(), w / 2, h / 2) }.getOrNull() }
                 val colors = runCatching { wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull()
                 val primary = colors?.primaryColor?.toArgb() ?: 0xFF3A3A3C.toInt()
                 if (bmp != null) {
                     fromBitmap(bmp, showImage = false)
                 } else {
-                    WallpaperState(image = null, blurred = null, averageColor = primary, isDark = ColorUtils.calculateLuminance(primary) < 0.5)
+                    WallpaperState(image = null, backdrop = null, averageColor = primary, isDark = ColorUtils.calculateLuminance(primary) < 0.5)
                 }
             }
         }
     }
 
     private fun fromBitmap(bmp: Bitmap, showImage: Boolean): WallpaperState {
-        val small = bmp.scale((bmp.width / 6).coerceAtLeast(8), (bmp.height / 6).coerceAtLeast(8))
-        val blurred = BlurUtils.blur(small, 10)
-        val avg = average(small)
+        val (w, h) = screenSize()
+        // 弱ぼかし: 画面の 1/2 解像度。クリア寄りでぼかしが弱くても拡大時に粗さが出ない
+        val light = BlurUtils.blur(bmp.scale((w / 2).coerceAtLeast(8), (h / 2).coerceAtLeast(8)), 3)
+        // 強ぼかし: 1/4 解像度で十分 (従来の 1/6・半径 10 と同等の効き具合で、より滑らか)
+        val heavySource = bmp.scale((w / 4).coerceAtLeast(8), (h / 4).coerceAtLeast(8))
+        val heavy = BlurUtils.blur(heavySource, 15)
+        val avg = average(heavySource)
         return WallpaperState(
-            image = if (showImage) bmp.asImageBitmap() else null,
-            blurred = blurred.asImageBitmap(),
+            image = if (showImage) bmp.toGpu().asImageBitmap() else null,
+            backdrop = Backdrop(light.toGpu().asImageBitmap(), heavy.toGpu().asImageBitmap()),
             averageColor = avg,
             isDark = ColorUtils.calculateLuminance(avg) < 0.55,
         )
     }
+
+    /** 描画専用のビットマップを GPU メモリへ移す (Java ヒープの節約とテクスチャ転送の削減)。 */
+    private fun Bitmap.toGpu(): Bitmap = runCatching { copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: this
 
     private fun average(bmp: Bitmap): Int {
         val tiny = bmp.scale(1, 1)

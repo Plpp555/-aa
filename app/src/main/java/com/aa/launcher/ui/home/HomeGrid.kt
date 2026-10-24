@@ -78,13 +78,16 @@ fun HomeGridPage(
         modifier
             .fillMaxSize()
             .onGloballyPositioned { c ->
-                vm.drag.pages[page.id] = PageGeometry(
-                    origin = c.positionInRoot(),
-                    cellWidth = c.size.width / grid.columns.toFloat(),
-                    cellHeight = c.size.height / grid.rows.toFloat(),
-                    columns = grid.columns,
-                    rows = grid.rows,
-                )
+                // スクロール中は毎フレーム呼ばれるので、変化したときだけ保存する
+                val origin = c.positionInRoot()
+                val old = vm.drag.pages[page.id]
+                val cellW = c.size.width / grid.columns.toFloat()
+                val cellH = c.size.height / grid.rows.toFloat()
+                if (old == null || old.origin != origin || old.cellWidth != cellW || old.cellHeight != cellH ||
+                    old.columns != grid.columns || old.rows != grid.rows
+                ) {
+                    vm.drag.pages[page.id] = PageGeometry(origin, cellW, cellH, grid.columns, grid.rows)
+                }
             },
     ) {
         val cellW = maxWidth / grid.columns

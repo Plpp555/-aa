@@ -1,6 +1,7 @@
 package com.aa.launcher.settings
 
 import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -28,6 +29,9 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aa.launcher.R
 import com.aa.launcher.core.AppLock
+import com.aa.launcher.core.FrameRateController
+import com.aa.launcher.core.LocalIconVersion
+import androidx.compose.runtime.CompositionLocalProvider
 import com.aa.launcher.launcherApp
 import com.aa.launcher.settings.ui.SettingsColors
 import com.aa.launcher.settings.ui.SettingsScreen
@@ -90,15 +94,19 @@ class SettingsNav(
 
 class SettingsActivity : ComponentActivity() {
 
+    private lateinit var frameRate: FrameRateController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        frameRate = FrameRateController(this)
         val repo = launcherApp.settingsRepository
         val start = Route.fromKey(intent.getStringExtra(EXTRA_ROUTE))
         val needsAuth = repo.current.requireAuthForSettings
 
         setContent {
             val settings by repo.settings.collectAsStateWithLifecycle()
+            val iconVersion by launcherApp.iconRepository.version.collectAsStateWithLifecycle()
             var authed by remember { mutableStateOf(!needsAuth) }
             LaunchedEffect(Unit) {
                 if (!authed) AppLock.authenticate(this@SettingsActivity, getString(R.string.auth_settings)) { authed = true }
@@ -111,12 +119,25 @@ class SettingsActivity : ComponentActivity() {
                     controller.isAppearanceLightNavigationBars = !dark
                 }
                 if (authed) {
-                    SettingsNavHost(start = start, update = repo::update, onExit = { finish() })
+                    CompositionLocalProvider(LocalIconVersion provides iconVersion) {
+                        SettingsNavHost(start = start, update = repo::update, onExit = { finish() })
+                    }
                 } else {
                     Box(Modifier.fillMaxSize().background(SettingsColors.background()))
                 }
             }
         }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        frameRate.onTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        frameRate.reset()
+        launcherApp.settingsRepository.flush()
     }
 
     companion object {

@@ -32,11 +32,11 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,6 +75,11 @@ import com.aa.launcher.ui.common.onGlass
 import com.aa.launcher.ui.common.onGlassSecondary
 import com.aa.launcher.ui.glass.liquidGlass
 import com.aa.launcher.ui.home.LocalApps
+import com.aa.launcher.ui.home.LocalContentActive
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.aa.launcher.ui.home.LocalLauncherActions
 import com.aa.launcher.ui.home.LocalWidgetHost
 import com.aa.launcher.ui.theme.LocalLauncherSettings
@@ -112,16 +117,27 @@ fun WidgetContent(item: WidgetItem, modifier: Modifier = Modifier, interactive: 
     }
 }
 
+/**
+ * 現在時刻 (intervalMs ごとに更新)。
+ * 画面が見えている (Activity が STARTED かつページが表示中) ときだけ時を刻み、
+ * 他のアプリ使用中や見えていないページでは更新を止める。境界 (分の切り替わりなど) にそろえて更新する。
+ */
 @Composable
 fun rememberNow(intervalMs: Long): Long {
-    val state = produceState(System.currentTimeMillis(), intervalMs) {
-        while (true) {
-            val now = System.currentTimeMillis()
-            value = now
-            delay(intervalMs - now % intervalMs + 5)
+    val active = LocalContentActive.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val state = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(intervalMs, active, lifecycle) {
+        if (!active) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                state.longValue = now
+                delay(intervalMs - now % intervalMs + 5)
+            }
         }
     }
-    return state.value
+    return state.longValue
 }
 
 @Composable
@@ -159,7 +175,7 @@ private fun WidgetCard(modifier: Modifier, onClick: (() -> Unit)? = null, conten
 private fun DigitalClockWidget(size: WidgetSize, modifier: Modifier, interactive: Boolean) {
     val context = LocalContext.current
     val s = LocalLauncherSettings.current
-    val now = rememberNow(if (s.clockShowSeconds) 1000L else 15_000L)
+    val now = rememberNow(if (s.clockShowSeconds) 1000L else 60_000L)
     val is24 = use24Hour()
     WidgetCard(modifier, onClick = if (interactive) ({ SystemActions.openAlarms(context); Unit }) else null) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -188,7 +204,7 @@ private fun DigitalClockWidget(size: WidgetSize, modifier: Modifier, interactive
 private fun AnalogClockWidget(modifier: Modifier, interactive: Boolean) {
     val context = LocalContext.current
     val s = LocalLauncherSettings.current
-    val now = rememberNow(if (s.clockShowSeconds) 1000L else 30_000L)
+    val now = rememberNow(if (s.clockShowSeconds) 1000L else 60_000L)
     val face = onGlass()
     val accent = Color(0xFFFF9F0A)
     WidgetCard(modifier, onClick = if (interactive) ({ SystemActions.openAlarms(context); Unit }) else null) {
@@ -312,7 +328,10 @@ private data class BatteryInfo(val level: Int, val charging: Boolean)
 private fun rememberBattery(): BatteryInfo {
     val context = LocalContext.current
     var info by remember { mutableStateOf(BatteryInfo(100, false)) }
-    DisposableEffect(context) {
+    val active = LocalContentActive.current
+    // 表示中だけ受信する (他のアプリ使用中や見えていないページでは登録しない)
+    LifecycleStartEffect(context, active) {
+        if (!active) return@LifecycleStartEffect onStopOrDispose { }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
                 intent ?: return
@@ -329,7 +348,7 @@ private fun rememberBattery(): BatteryInfo {
         }
         ContextCompat.registerReceiver(context, receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
             ?.let { receiver.onReceive(context, it) }
-        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+        onStopOrDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
     return info
 }
