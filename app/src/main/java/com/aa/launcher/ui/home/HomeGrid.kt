@@ -148,6 +148,7 @@ fun Dock(
     ) {
         val n = preview.size.coerceAtLeast(1)
         val slotW = maxWidth / n
+        val slotH = maxHeight
         preview.forEachIndexed { index, item ->
             key(item.id) {
                 val target = with(density) { IntOffset((slotW * index).roundToPx(), 0) }
@@ -156,7 +157,7 @@ fun Dock(
                     ItemCell(
                         item = item,
                         width = slotW,
-                        height = maxHeight,
+                        height = slotH,
                         iconSize = iconSize,
                         showLabel = settings.dockLabels,
                         ghost = item.id == draggingId,
