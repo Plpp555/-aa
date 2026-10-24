@@ -5,6 +5,12 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 > Apple Inc. とは関係のない個人プロジェクトです。
 
+![スクリーンショット](docs/screenshots.jpg)
+
+左上から: ホーム画面 / 今日の表示 / App ライブラリ / Spotlight / 長押しメニュー / フォルダ / カスタマイズ /
+コントロールセンター / 色合いアイコン / ダークモード + クリアアイコン / 壁紙「サンライズ」 / 設定 (日本語・ダーク)。
+(CI のエミュレータで撮影したものです)
+
 ## 主な機能
 
 ### ホーム画面
@@ -99,7 +105,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 GitHub Actions (`.github/workflows/android.yml`) が push のたびに debug / release の APK をビルドし、
 Artifacts (`liquid-launcher-apk`) としてアップロードします。
 
-また `.github/workflows/emulator-smoke.yml` では、Android エミュレータ (API 34) 上で実際にランチャーを起動し、
+また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34) 上で実際にランチャーを起動し、
 初回案内 → ホーム画面 → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
 設定画面、さらにドラッグでのフォルダ作成・ウィジェット追加・ダークモード・壁紙変更・日本語表示までを操作して、
 画面のテキストとクラッシュログを出力します (`.github/scripts/smoke*.sh`)。
