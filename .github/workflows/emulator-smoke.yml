@@ -9,6 +9,10 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [smoke.sh, smoke2.sh]
     steps:
       - uses: actions/checkout@v4
 
@@ -44,4 +48,4 @@ jobs:
           profile: pixel_6
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash .github/scripts/smoke.sh && bash .github/scripts/smoke2.sh
+          script: bash .github/scripts/${{ matrix.scenario }}

@@ -4,6 +4,9 @@ PKG=com.aa.launcher.debug
 OUT=/tmp/smoke
 mkdir -p "$OUT"
 
+ADB_BIN=$(command -v adb)
+adb() { timeout 60 "$ADB_BIN" "$@"; }
+
 shot() {
   sleep "${2:-2}"
   adb exec-out screencap -p > "$OUT/$1.png"
@@ -60,15 +63,26 @@ except Exception as e:
 }
 
 
-# 指を押したまま移動して離す (ドラッグ & ドロップ)。最後に dwell 秒だけ止まる。
+# 長押ししてからドラッグして離す (input draganddrop は長押し時間だけ待ってから移動する)。
 drag_to() {
-  local x1=$1 y1=$2 x2=$3 y2=$4 hold=${5:-0.3} dwell=${6:-1.2} shotname=${7:-}
-  adb shell input motionevent DOWN "$x1" "$y1"
-  sleep "$hold"
-  for i in 1 2 3 4 5 6 7 8; do
-    adb shell input motionevent MOVE $((x1 + (x2 - x1) * i / 8)) $((y1 + (y2 - y1) * i / 8))
-  done
-  sleep "$dwell"
-  [ -n "$shotname" ] && shot "$shotname" 0
-  adb shell input motionevent UP "$x2" "$y2"
+  local x1=$1 y1=$2 x2=$3 y2=$4 duration=${5:-2500}
+  adb shell input draganddrop "$x1" "$y1" "$x2" "$y2" "$duration"
+}
+
+# 初回起動の準備: インストール、ホームアプリ設定、通知アクセス、初回案内を閉じる
+setup_app() {
+  adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+  adb shell cmd package set-home-activity "$PKG/com.aa.launcher.MainActivity" || true
+  adb shell cmd notification allow_listener "$PKG/com.aa.launcher.service.BadgeNotificationListener" || true
+  adb logcat -c
+  adb shell am start -W -n "$PKG/com.aa.launcher.MainActivity"
+  sleep 10
+}
+
+print_logs() {
+  echo "=== CRASH BUFFER ==="
+  adb logcat -d -b crash
+  echo "=== APP LOG ==="
+  adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher.debug.*(Exception|Error)" | grep -v -E "AppsFilter|uiautomator|RuntimeInit|boot image|lock profiling|Shutting down VM" | tail -120
+  echo "=== END ==="
 }

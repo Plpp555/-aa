@@ -2,16 +2,9 @@
 # エミュレータ上でランチャーを起動して主要画面のスクリーンショットとクラッシュログを出力する。
 set -u
 source "$(dirname "$0")/smoke_lib.sh"
-APK=app/build/outputs/apk/debug/app-debug.apk
 
-adb install -r -g "$APK"
-adb shell cmd package set-home-activity "$PKG/com.aa.launcher.MainActivity" || true
-adb shell cmd notification allow_listener "$PKG/com.aa.launcher.service.BadgeNotificationListener" || true
-adb shell wm size
-adb logcat -c
-
-adb shell am start -W -n "$PKG/com.aa.launcher.MainActivity"
-shot 01_onboarding 12
+setup_app
+shot 01_onboarding 2
 dump_texts onboarding
 tap_text "Get Started"
 shot 02_home 4
@@ -70,8 +63,4 @@ adb shell input keyevent KEYCODE_BACK
 adb shell input keyevent KEYCODE_HOME
 shot 12_home_tinted 4
 
-echo "=== CRASH BUFFER ==="
-adb logcat -d -b crash
-echo "=== APP LOG ==="
-adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher.debug.*(Exception|Error)" | grep -v AppsFilter | tail -120
-echo "=== END ==="
+print_logs

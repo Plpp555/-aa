@@ -99,6 +99,11 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 GitHub Actions (`.github/workflows/android.yml`) が push のたびに debug / release の APK をビルドし、
 Artifacts (`liquid-launcher-apk`) としてアップロードします。
 
+また `.github/workflows/emulator-smoke.yml` では、Android エミュレータ (API 34) 上で実際にランチャーを起動し、
+初回案内 → ホーム画面 → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
+設定画面、さらにドラッグでのフォルダ作成・ウィジェット追加・ダークモード・壁紙変更・日本語表示までを操作して、
+画面のテキストとクラッシュログを出力します (`.github/scripts/smoke*.sh`)。
+
 - debug ビルドのパッケージ名は `com.aa.launcher.debug` なので、release 版と並べてインストールできます
 - release ビルドはそのままインストールできるよう debug 鍵で署名しています。配布する場合は独自の署名設定に置き換えてください
 

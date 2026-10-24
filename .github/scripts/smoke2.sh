@@ -3,15 +3,24 @@
 set -u
 source "$(dirname "$0")/smoke_lib.sh"
 
+setup_app
+tap_text "Get Started"
+sleep 2
+
+# テスト中は編集モードの揺れを止める (アニメーション中は uiautomator が待たされるため)
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --es route animations
+sleep 2
+tap_text "Wiggle in Edit Mode"
+shot 13_animations_settings 1
 adb shell input keyevent KEYCODE_HOME
 sleep 2
 
-# YouTube を YT Music に重ねてフォルダを作る (長押し → メニュー → そのままドラッグ)
+# YouTube を YT Music に重ねてフォルダを作る (長押し → そのままドラッグ)
 A=$(find_text "YouTube"); B=$(find_text "YT Music")
 echo "YouTube=$A YTMusic=$B"
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
-  drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))" 1.0 1.4 13_merge_hover
+  drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))" 3000
   shot 14_folder_open 2
   dump_texts folder
   adb shell input keyevent KEYCODE_BACK
@@ -23,7 +32,7 @@ fi
 A=$(find_text "Maps"); B=$(find_text "Calendar")
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
-  drag_to "$1" "$(($2 - 90))" "$(($3 - 60))" "$(($4 - 90))" 1.0 0.8
+  drag_to "$1" "$(($2 - 90))" "$(($3 - 60))" "$(($4 - 90))" 2000
   sleep 1
   tap_text "Done"
   shot 16_reordered 2
@@ -91,8 +100,4 @@ sleep 1
 adb shell input text "keisan"
 shot 29_spotlight_ja 2
 
-echo "=== CRASH BUFFER 2 ==="
-adb logcat -d -b crash
-echo "=== APP LOG 2 ==="
-adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher.debug.*(Exception|Error)" | grep -v AppsFilter | tail -120
-echo "=== END 2 ==="
+print_logs
