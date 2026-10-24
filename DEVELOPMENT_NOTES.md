@@ -63,7 +63,8 @@
 - `smoke2.sh`: 揺れオフ → ドラッグでフォルダ作成 → 並べ替え → 長押しメニュー後のドラッグ (Photos) → ウィジェット追加 → カスタマイズ (クリア) → ダーク → 壁紙 → フォルダ → 日本語。
 - 注意:
   - 以前は「`input motionevent` はイベントごとに downTime が変わるため長押し→ドラッグに使えない」としていたが、
-    実際の原因は 6.4 の不具合 (メニュー表示で祖先の pointerInput が外れる) だった可能性が高い。検証結果は 10 章を参照。
+    dd32fda 以降は `input motionevent` でも長押し→ドラッグが成功している。以前うまくいかなかったのは 6.4 の不具合
+    (メニュー表示で祖先の pointerInput が外れる) が原因だった可能性が高い。
   - 編集モードの揺れ (無限アニメーション) 中は uiautomator のダンプが待たされるので、smoke2 では最初に揺れをオフにしている。
   - エミュレータ標準の Pixel Launcher が ANR ダイアログを出すため `pm disable-user` で無効化している (このとき SystemUI のクラッシュがログに出るが本アプリとは無関係)。
   - 設定画面をルート指定で開くときは `--activity-clear-task` を付ける。
@@ -307,7 +308,14 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 75c4880 | **パフォーマンス最適化とクリアアイコン修正** (下記) |
 | 6c8fe9f | DEVELOPMENT_NOTES.md・CLAUDE.md・tools/ を追加 |
 | 278da56 | スモークテストに `hold_then_drag` (長押しでメニューが出てから指を動かす、人の操作の間合い) を追加 |
-| (次のコミット) | **長押しメニュー表示後にドラッグへ移行できない不具合の修正** (`homeVerticalSwipe` を付け外ししない)、FrameRateController の無駄な relayout 削減 |
+| dd32fda | **長押しメニュー表示後にドラッグへ移行できない不具合の修正** (`homeVerticalSwipe` を付け外ししない)、FrameRateController の無駄な relayout 削減 |
+
+### dd32fda の検証結果 (2026-10-24)
+- Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。
+- Emulator smoke test: smoke2 で `HOLD_DRAG 16b_hold_then_drag: drag started` (1.2 秒押してメニューが出た後に動かしてドラッグ開始)、
+  draganddrop でのフォルダ作成 (Entertainment)・並べ替え・ウィジェット追加・クリア/ダーク・日本語もすべて成功。smoke.sh も成功 (Spotlight・コントロールセンターの縦スワイプ含む)。
+  クラッシュバッファは SystemUI (Pixel Launcher 無効化の副作用) のみ。
+- 修正前 (278da56) の比較実行は、SystemUI のクラッシュでホームに戻れず途中のステップが進まなかったため、修正前の失敗は直接は確認できていない。
 
 ### 75c4880 の詳細 (2026-10-24)
 - Liquid Glass を Modifier.Node 化 (composed を廃止)、キャッシュ、ガラス/中身のレイヤー分離。
