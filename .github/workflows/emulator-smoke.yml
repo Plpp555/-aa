@@ -44,15 +44,4 @@ jobs:
           profile: pixel_6
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash .github/scripts/smoke.sh
-
-      # スクリーンショットを注釈として公開する (1 ステップあたりの件数制限があるため分割)
-      - name: Publish screenshots (1/3)
-        if: always()
-        run: for f in $(ls /tmp/smoke/*.jpg 2>/dev/null | sort | sed -n '1,5p'); do echo "::notice title=$(basename "$f" .jpg)::$(base64 -w 0 "$f")"; done
-      - name: Publish screenshots (2/3)
-        if: always()
-        run: for f in $(ls /tmp/smoke/*.jpg 2>/dev/null | sort | sed -n '6,10p'); do echo "::notice title=$(basename "$f" .jpg)::$(base64 -w 0 "$f")"; done
-      - name: Publish screenshots (3/3)
-        if: always()
-        run: for f in $(ls /tmp/smoke/*.jpg 2>/dev/null | sort | sed -n '11,15p'); do echo "::notice title=$(basename "$f" .jpg)::$(base64 -w 0 "$f")"; done
+          script: bash .github/scripts/smoke.sh && bash .github/scripts/smoke2.sh

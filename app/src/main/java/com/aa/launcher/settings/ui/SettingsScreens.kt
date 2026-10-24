@@ -114,7 +114,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(route: Route, nav: SettingsNav, isRoot: Boolean, onExit: () -> Unit) {
     val title = com.aa.launcher.settings.routeTitle(route)
-    SettingsPage(title = title, onBack = if (isRoot) onExit else nav.pop, backLabel = if (isRoot) null else nav.backLabel) {
+    SettingsPage(title = title, onBack = if (isRoot) null else nav.pop, backLabel = if (isRoot) null else nav.backLabel) {
         when (route) {
             Route.Root -> RootContent(nav)
             Route.Wallpaper -> WallpaperContent(nav)
