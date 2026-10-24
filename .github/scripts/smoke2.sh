@@ -8,7 +8,7 @@ tap_text "Get Started"
 sleep 2
 
 # テスト中は編集モードの揺れを止める (アニメーション中は uiautomator が待たされるため)
-adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --es route animations
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route animations
 sleep 2
 tap_text "Wiggle in Edit Mode"
 shot 13_animations_settings 1
@@ -64,7 +64,7 @@ tap_text "Done"
 shot 21_clear_icons 2
 
 # ダークモード
-adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --es route appearance
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route appearance
 sleep 2
 tap_text "Dark"
 shot 22_appearance_dark 2
@@ -72,7 +72,7 @@ adb shell input keyevent KEYCODE_HOME
 shot 23_home_dark 3
 
 # 壁紙
-adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --es route wallpaper
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route wallpaper
 shot 24_wallpaper_settings 3
 XY=$(find_text "Sunrise")
 if [ -n "$XY" ]; then set -- $XY; adb shell input tap "$1" "$(($2 - 250))"; fi
@@ -90,7 +90,7 @@ adb shell input keyevent KEYCODE_BACK
 # 日本語表示
 adb shell cmd locale set-app-locales "$PKG" --locales ja-JP || true
 sleep 3
-adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity"
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task
 shot 27_settings_ja 3
 dump_texts settings_ja
 adb shell input keyevent KEYCODE_HOME

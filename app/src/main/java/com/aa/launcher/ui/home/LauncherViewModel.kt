@@ -191,7 +191,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun openSettings(context: Context, route: String? = null) {
         val intent = Intent(context, SettingsActivity::class.java)
-        if (route != null) intent.putExtra(SettingsActivity.EXTRA_ROUTE, route)
+        if (route != null) {
+            // 既存の設定タスクがあっても指定した画面から開き直す
+            intent.putExtra(SettingsActivity.EXTRA_ROUTE, route)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
         SystemActions.start(context, intent)
     }
 
@@ -357,11 +361,30 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         drag.reset()
         drag.visualIconSize = iconSize
         drag.visualShowLabel = showLabel
+        // 指を動かすまでは元の位置を空けたままにする (隣のアイコンが詰めてこないように)
+        val initial = initialTarget(item, origin)
+        drag.target = initial
+        drag.pendingTarget = initial
         drag.payload = DragPayload(item, origin)
         drag.pointer = pointer
         drag.grabOffset = grabOffset
         drag.itemSize = size
         dragMove(pointer)
+    }
+
+    private fun initialTarget(item: HomeItem, origin: DragOrigin): DropTarget? {
+        val l = layout.value ?: return null
+        return when (origin) {
+            is DragOrigin.Page -> l.pages.firstOrNull { it.id == origin.pageId }?.items
+                ?.indexOfFirst { it.id == item.id }?.takeIf { it >= 0 }
+                ?.let { DropTarget.Page(origin.pageId, it) }
+            DragOrigin.Dock -> l.dock.indexOfFirst { it.id == item.id }.takeIf { it >= 0 }?.let { DropTarget.Dock(it) }
+            is DragOrigin.Folder -> {
+                val app = (item as? AppItem)?.app ?: return null
+                LayoutOps.findFolder(l, origin.folderId)?.apps?.indexOf(app)?.takeIf { it >= 0 }
+                    ?.let { DropTarget.Folder(origin.folderId, it) }
+            }
+        }
     }
 
     fun cancelDrag() {
@@ -375,7 +398,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val p = drag.payload ?: return items
         val base = items.filter { it.id != p.item.id }
         val t = drag.target
-        return if (t is DropTarget.Page && t.pageId == pageId && drag.mergeTarget == null) {
+        return if (t is DropTarget.Page && t.pageId == pageId) {
             base.toMutableList().apply { add(t.index.coerceIn(0, size), p.item) }
         } else {
             base
@@ -386,7 +409,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val p = drag.payload ?: return items
         val base = items.filter { it.id != p.item.id }
         val t = drag.target
-        return if (t is DropTarget.Dock && drag.mergeTarget == null && base.size < grid.dockSlots) {
+        return if (t is DropTarget.Dock && base.size < grid.dockSlots) {
             base.toMutableList().apply { add(t.index.coerceIn(0, size), p.item) }
         } else {
             base

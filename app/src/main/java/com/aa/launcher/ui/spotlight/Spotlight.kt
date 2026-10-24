@@ -124,7 +124,10 @@ data class SettingShortcut(
 )
 
 private fun launcherRoute(route: String): (Context) -> Unit = { ctx ->
-    SystemActions.start(ctx, Intent(ctx, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_ROUTE, route))
+    val intent = Intent(ctx, SettingsActivity::class.java)
+        .putExtra(SettingsActivity.EXTRA_ROUTE, route)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    SystemActions.start(ctx, intent)
 }
 
 private fun system(action: String): (Context) -> Unit = { ctx -> SystemActions.start(ctx, Intent(action)) }
