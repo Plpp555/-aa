@@ -9,11 +9,8 @@ mkdir -p "$OUT"
 shot() {
   sleep "${2:-2}"
   adb exec-out screencap -p > "$OUT/$1.png"
-  convert "$OUT/$1.png" -resize 300x -quality 50 "$OUT/$1.jpg"
-  echo "SHOT_BEGIN $1"
-  base64 -w 0 "$OUT/$1.jpg"
-  echo
-  echo "SHOT_END $1"
+  convert "$OUT/$1.png" -resize 300x -quality 45 "$OUT/$1.jpg"
+  echo "shot $1 ($(stat -c %s "$OUT/$1.jpg") bytes)"
 }
 
 find_text() {
@@ -130,5 +127,5 @@ shot 12_home_tinted 4
 echo "=== CRASH BUFFER ==="
 adb logcat -d -b crash
 echo "=== APP LOG ==="
-adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|com\.aa\.launcher|ANR in" | tail -150
+adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher.debug.*(Exception|Error)" | grep -v AppsFilter | tail -120
 echo "=== END ==="
