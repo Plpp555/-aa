@@ -7,7 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,9 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -263,39 +264,48 @@ fun Modifier.homeBackgroundGestures(
     }
 }
 
-/** ホーム画面の縦スワイプ (下: Spotlight / 右上から下: コントロールセンター / 上: App ライブラリ等)。 */
+/**
+ * ホーム画面の縦スワイプ (下: Spotlight / 右上から下: コントロールセンター / 上: App ライブラリ等)。
+ *
+ * [enabled] は指を置いたときに評価する。条件によってこの修飾子を付け外ししないこと:
+ * 祖先の pointerInput が外れると、Compose はその下にある子孫 (アイコン) の進行中のジェスチャーも取り消すため、
+ * 長押しメニューが出た後に指を動かしてもドラッグへ移行できなくなる。
+ */
 fun Modifier.homeVerticalSwipe(
-    enabled: Boolean,
+    enabled: () -> Boolean,
     settings: LauncherSettings,
     screenWidth: () -> Float,
     screenHeight: () -> Float,
     onGesture: (GestureType) -> Unit,
-): Modifier = if (!enabled) this else pointerInput(settings.swipeDownAction, settings.swipeUpAction, settings.swipeDownRightAction) {
-    var start = Offset.Zero
-    var total = 0f
-    var fired = false
+): Modifier = pointerInput(settings.swipeDownAction, settings.swipeUpAction, settings.swipeDownRightAction) {
     val threshold = 56.dp.toPx()
-    detectVerticalDragGestures(
-        onDragStart = {
-            start = it
-            total = 0f
-            fired = false
-        },
-        onDragEnd = { fired = false },
-        onDragCancel = { fired = false },
-        onVerticalDrag = { change, dy ->
-            total += dy
-            if (!fired && abs(total) > threshold) {
-                fired = true
-                val type = if (total > 0) {
-                    val fromTopRight = start.y < screenHeight() * 0.18f && start.x > screenWidth() * 0.6f
-                    if (fromTopRight && settings.swipeDownRightAction != GestureAction.NONE) GestureType.SWIPE_DOWN_RIGHT else GestureType.SWIPE_DOWN
-                } else {
-                    GestureType.SWIPE_UP
-                }
-                onGesture(type)
-            }
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        // 無効な間 (他のページ・オーバーレイ表示中・ドラッグ中) はイベントを消費せずに見送る
+        if (!enabled()) return@awaitEachGesture
+        var total = 0f
+        val drag = awaitVerticalTouchSlopOrCancellation(down.id) { change, over ->
             change.consume()
-        },
-    )
+            total = over
+        } ?: return@awaitEachGesture
+        var fired = false
+        fun fireIfNeeded() {
+            if (fired || abs(total) <= threshold || !enabled()) return
+            fired = true
+            val type = if (total > 0) {
+                val start = down.position
+                val fromTopRight = start.y < screenHeight() * 0.18f && start.x > screenWidth() * 0.6f
+                if (fromTopRight && settings.swipeDownRightAction != GestureAction.NONE) GestureType.SWIPE_DOWN_RIGHT else GestureType.SWIPE_DOWN
+            } else {
+                GestureType.SWIPE_UP
+            }
+            onGesture(type)
+        }
+        fireIfNeeded()
+        verticalDrag(drag.id) { change ->
+            total += change.positionChange().y
+            change.consume()
+            fireIfNeeded()
+        }
+    }
 }

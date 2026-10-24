@@ -57,11 +57,13 @@
 
 ### 3.3 スモークテスト (`.github/scripts/`)
 - `smoke_lib.sh`: 共通関数。`shot` (スクショを base64 でログに出力)、`find_text`/`tap_text`/`long_press_text` (uiautomator のダンプで文字列を探してタップ)、
-  `drag_to` (`input draganddrop` = 長押し後にドラッグ)、`setup_app` (インストール、ホーム設定、Pixel Launcher 無効化、初回起動)、`print_logs`。
+  `drag_to` (`input draganddrop` = 長押し時間ちょうどで動き始めるドラッグ)、
+  `hold_then_drag` (`input motionevent` で 1.2 秒押したまま → 動かす → 離す前に "Done" の有無で `HOLD_DRAG ...: drag started / no drag` を出力)、`setup_app` (インストール、ホーム設定、Pixel Launcher 無効化、初回起動)、`print_logs`。
 - `smoke.sh`: 初回案内 → ホーム → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター → 設定 → 色合いアイコン。
-- `smoke2.sh`: 揺れオフ → ドラッグでフォルダ作成 → 並べ替え → ウィジェット追加 → カスタマイズ (クリア) → ダーク → 壁紙 → フォルダ → 日本語。
+- `smoke2.sh`: 揺れオフ → ドラッグでフォルダ作成 → 並べ替え → 長押しメニュー後のドラッグ (Photos) → ウィジェット追加 → カスタマイズ (クリア) → ダーク → 壁紙 → フォルダ → 日本語。
 - 注意:
-  - `input motionevent` はイベントごとに downTime が変わるため長押し→ドラッグの検証に使えない。`input draganddrop` を使う。
+  - 以前は「`input motionevent` はイベントごとに downTime が変わるため長押し→ドラッグに使えない」としていたが、
+    実際の原因は 6.4 の不具合 (メニュー表示で祖先の pointerInput が外れる) だった可能性が高い。検証結果は 10 章を参照。
   - 編集モードの揺れ (無限アニメーション) 中は uiautomator のダンプが待たされるので、smoke2 では最初に揺れをオフにしている。
   - エミュレータ標準の Pixel Launcher が ANR ダイアログを出すため `pm disable-user` で無効化している (このとき SystemUI のクラッシュがログに出るが本アプリとは無関係)。
   - 設定画面をルート指定で開くときは `--activity-clear-task` を付ける。
@@ -165,7 +167,14 @@ docs/screenshots.jpg  README 用スクリーンショット
 ### 6.4 ジェスチャー
 - `launcherItemGestures`: タップ / 長押し (非編集 420ms・編集 220ms) / 移動。長押し後のイベントは Initial パスで消費し、子要素 (ウィジェット内ボタン) のクリックを防ぐ。
 - 背景ジェスチャー (`homeBackgroundGestures`): `vm.lastItemDownUptime` でアイテム上の押下を除外。長押し=編集、タップ=編集終了、ダブルタップ=設定の動作。
-- 縦スワイプ (`homeVerticalSwipe`): 下 / 右上から下 (y<18% かつ x>60%) / 上。ホームページ表示中かつオーバーレイなしのときだけ有効。
+- 縦スワイプ (`homeVerticalSwipe`): 下 / 右上から下 (y<18% かつ x>60%) / 上。ホームページ表示中・オーバーレイなし・ドラッグ中でないときだけ有効。
+  **修飾子は常に付けたまま**、有効かどうかは指を置いた時点で `enabled()` を評価する (無効ならイベントを消費せず見送る)。
+- **重要な規則: アイコンの祖先に付く `pointerInput` を状態によって付け外ししないこと。**
+  Compose は祖先の pointerInput ノードが外れると、その下の子孫の進行中ジェスチャーもキャンセルする (HitPathTracker)。
+  以前は `homeVerticalSwipe` を `if (!enabled) this else pointerInput(...)` で付け外ししていたため、
+  長押しメニューが出る (= `hasOverlay` が true になり修飾子が外れる) とアイコンのジェスチャーが取り消され、
+  メニュー表示後に指を動かしてもドラッグに移行しなかった (メニューが出たのと同じフレームで指が動いた場合だけ移行できた)。
+  ドラッグ開始後のページャーの `userScrollEnabled = false` も同じ理由で子孫を取り消すが、その時点で追跡はルートの `dragTracking` (祖先) に移っているので問題ない。
 - AppWidget は AndroidView がタッチを消費するため、`RoundedWidgetHostView.dispatchTouchEvent` で長押しを検出してメニューを出す。
   編集モードでは上に透明 Box を重ねてドラッグできるようにしている。
 
@@ -218,6 +227,8 @@ docs/screenshots.jpg  README 用スクリーンショット
   (Android 15+ は `View.requestedFrameRate = REQUESTED_FRAME_RATE_CATEGORY_HIGH` も)。
   タッチ開始で引き上げ、指を離して 1.5 秒後に解除。編集モードの揺れ・ドラッグ中は `hold`。ホームボタン (onNewIntent) で `pulse`。
   解除時は 0 (システム既定) に戻すので、静止中は可変リフレッシュレートが効き電池を消費しない。
+  ウィンドウ属性の更新は relayout を伴うため、同じ解像度で **複数のリフレッシュレートを選べる端末だけ** で行う
+  (60Hz 固定の端末やエミュレータではタッチのたびの無駄な relayout をしない)。
 - **設定の保存**: メモリ上の値を即時反映、ファイル書き込みは 300ms デバウンス (スライダー操作で毎回書かない)。onStop で flush。
 - **配置情報**: `HomeGridPage` のジオメトリは変化時だけ保存 (スクロール中の毎フレーム割り当てを回避)。
 - **メモリ**: アイコン・壁紙・背景は HARDWARE ビットマップ (Java ヒープを消費しない)。
@@ -277,6 +288,9 @@ docs/screenshots.jpg  README 用スクリーンショット
 - メニュー・シート等のガラスは壁紙だけを写す (背後のアイコンは写らない。背後のコンテンツ自体は Modifier.blur でぼかしている)。
 - `FrameRateController` は端末のシステム設定 (例: 60Hz 固定) を超えることはできない。
 - スモークテストで SystemUI のクラッシュが出ることがある (Pixel Launcher 無効化の副作用、本アプリとは無関係)。
+- スモークテストの `drag_to` (`input draganddrop`) は長押し時間 (400ms) ちょうどで指を動かし始め、アプリの長押し判定 (400ms) と競合する。
+  そのため結果がタイミングに左右されることがある (75c4880 の実行では 2 回のドラッグがメニュー表示のまま失敗、同じコードの 6c8fe9f では成功)。
+  メニュー表示後に動かす操作は `hold_then_drag` で確認する。
 
 ## 10. 修正履歴
 
@@ -291,7 +305,9 @@ docs/screenshots.jpg  README 用スクリーンショット
 | a50d8fe | ドラッグ開始時に元の位置を空けたままにする (フォルダ化できない不具合の修正)、フォルダ化候補中のプレビュー固定、設定のルート指定を CLEAR_TASK で確実に |
 | 249563a | README にスクリーンショット、CI 整理 (スモークは PR/手動、checkout/setup-java v5) |
 | 75c4880 | **パフォーマンス最適化とクリアアイコン修正** (下記) |
-| (このファイル) | DEVELOPMENT_NOTES.md・CLAUDE.md・tools/ を追加 |
+| 6c8fe9f | DEVELOPMENT_NOTES.md・CLAUDE.md・tools/ を追加 |
+| 278da56 | スモークテストに `hold_then_drag` (長押しでメニューが出てから指を動かす、人の操作の間合い) を追加 |
+| (次のコミット) | **長押しメニュー表示後にドラッグへ移行できない不具合の修正** (`homeVerticalSwipe` を付け外ししない)、FrameRateController の無駄な relayout 削減 |
 
 ### 75c4880 の詳細 (2026-10-24)
 - Liquid Glass を Modifier.Node 化 (composed を廃止)、キャッシュ、ガラス/中身のレイヤー分離。

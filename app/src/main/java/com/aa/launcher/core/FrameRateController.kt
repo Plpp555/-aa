@@ -35,10 +35,11 @@ class FrameRateController(private val activity: Activity, private val releaseDel
                 activity.windowManager.defaultDisplay
             } ?: return@runCatching null
             val current = display.mode
-            display.supportedModes
+            val sameSize = display.supportedModes
                 .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
-                .maxByOrNull { it.refreshRate }
-                ?.takeIf { it.refreshRate > current.refreshRate + 0.5f || display.supportedModes.size > 1 }
+            val best = sameSize.maxByOrNull { it.refreshRate } ?: return@runCatching null
+            // 選べるリフレッシュレートが 1 つしかない端末 (60Hz 固定など) では要求しても何も変わらない
+            best.takeIf { sameSize.any { m -> m.refreshRate < best.refreshRate - 0.5f } }
         }.getOrNull()
     }
 
@@ -89,13 +90,16 @@ class FrameRateController(private val activity: Activity, private val releaseDel
     private fun apply(on: Boolean) {
         if (on == boosted) return
         boosted = on
+        // ウィンドウ属性の更新は relayout を伴うので、表示モードを選べる端末だけで行う
         val mode = highMode
-        runCatching {
-            val window = activity.window
-            val lp = window.attributes
-            lp.preferredDisplayModeId = if (on && mode != null) mode.modeId else 0
-            lp.preferredRefreshRate = if (on && mode != null) mode.refreshRate else 0f
-            window.attributes = lp
+        if (mode != null) {
+            runCatching {
+                val window = activity.window
+                val lp = window.attributes
+                lp.preferredDisplayModeId = if (on) mode.modeId else 0
+                lp.preferredRefreshRate = if (on) mode.refreshRate else 0f
+                window.attributes = lp
+            }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             runCatching {

@@ -309,12 +309,14 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         val bottomReserved = navBottom + 8.dp + dockH + indicatorH
 
         val onHome = pages.getOrNull(pagerState.currentPage) is PageModel.Home
+        // 縦スワイプは修飾子を付けたまま、押した時点の状態で有効/無効を判断する (HomeGrid.homeVerticalSwipe 参照)
+        val verticalSwipeEnabled = rememberUpdatedState(onHome && !vm.drag.active && !vm.hasOverlay)
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
                 .homeVerticalSwipe(
-                    enabled = onHome && !vm.drag.active && !vm.hasOverlay,
+                    enabled = { verticalSwipeEnabled.value },
                     settings = settings,
                     screenWidth = { vm.drag.screenWidth },
                     screenHeight = { with(density) { maxHeight.toPx() } },
