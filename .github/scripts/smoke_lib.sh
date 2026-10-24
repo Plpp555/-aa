@@ -79,6 +79,26 @@ drag_to() {
   adb shell input draganddrop "$x1" "$y1" "$x2" "$y2" "$duration"
 }
 
+# 人の操作と同じ間合いの長押し → ドラッグ: 押したまま待ち (メニューが出る)、少し後で指を動かす。
+# 指を離す前に画面を記録し、編集モード ("Done") になっていればドラッグに移行できている。最後は元の位置で離す。
+# (input draganddrop は長押し時間ちょうどで動き始めるので、メニュー表示後に動かす操作は確認できない)
+hold_then_drag() {
+  local x=$1 y=$2 name=$3
+  adb shell input motionevent DOWN "$x" "$y"
+  sleep 1.2
+  adb shell input motionevent MOVE "$((x + 8))" "$((y + 4))"
+  sleep 0.3
+  adb shell input motionevent MOVE "$((x + 30))" "$((y + 25))"
+  adb shell input motionevent MOVE "$((x + 45))" "$((y + 40))"
+  sleep 0.8
+  shot "$name" 0
+  dump_texts "$name"
+  if grep -q 'text="Done"' "$OUT/ui.xml"; then echo "HOLD_DRAG $name: drag started"; else echo "HOLD_DRAG $name: no drag"; fi
+  adb shell input motionevent MOVE "$x" "$y"
+  sleep 0.6
+  adb shell input motionevent UP "$x" "$y"
+}
+
 # 初回起動の準備: インストール、ホームアプリ設定、通知アクセス、初回案内を閉じる
 setup_app() {
   adb install -r -g app/build/outputs/apk/debug/app-debug.apk

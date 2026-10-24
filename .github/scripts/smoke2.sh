@@ -38,6 +38,16 @@ if [ -n "$A" ] && [ -n "$B" ]; then
   shot 16_reordered 2
 fi
 
+# 長押しでメニューが出てから指を動かしてもドラッグへ移行すること (人の操作の間合い)
+A=$(find_text "Photos")
+if [ -n "$A" ]; then
+  set -- $A
+  hold_then_drag "$1" "$(($2 - 90))" 16b_hold_then_drag
+  sleep 1
+  if [ -n "$(find_text Done)" ]; then tap_text "Done"; else adb shell input keyevent KEYCODE_BACK; fi
+  sleep 1
+fi
+
 # ウィジェットの追加
 long_press_text "Settings"
 sleep 1
