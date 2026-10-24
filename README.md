@@ -99,7 +99,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 ```bash
 ./gradlew assembleDebug      # app/build/outputs/apk/debug/
-./gradlew assembleRelease    # app/build/outputs/apk/release/ (debug 鍵で署名)
+./gradlew assembleRelease    # app/build/outputs/apk/release/
 ```
 
 GitHub Actions (`.github/workflows/android.yml`) が push のたびに debug / release の APK をビルドし、
@@ -111,7 +111,10 @@ Artifacts (`liquid-launcher-apk`) としてアップロードします。
 画面のテキストとクラッシュログを出力します (`.github/scripts/smoke*.sh`)。
 
 - debug ビルドのパッケージ名は `com.aa.launcher.debug` なので、release 版と並べてインストールできます
-- release ビルドはそのままインストールできるよう debug 鍵で署名しています。配布する場合は独自の署名設定に置き換えてください
+- debug / release とも、リポジトリ内の固定の鍵 (`app/signing/`) で署名しているので、新しいビルドをそのまま上書き更新できます。
+  鍵は公開されているため、配布する場合は独自の署名設定に置き換えてください
+- 2026-10-24 以前のビルド (CI が毎回作る鍵で署名) を入れている場合は、一度アンインストールしてから入れ直してください
+  (設定 →「バックアップとリセット」で書き出しておけば復元できます)
 
 ## 使い方
 

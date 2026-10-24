@@ -75,7 +75,11 @@
 - Compose BOM 2025.08.00 (Compose 1.9 系)、Material3、material-icons-extended 1.7.8
 - androidx.core-ktx 1.16.0、activity-compose 1.10.1、lifecycle 2.9.2、datastore 1.1.7、kotlinx-serialization-json 1.9.0
 - compileSdk 36 / targetSdk 36 / minSdk 29、JDK 17
-- release ビルドは R8 (minify + shrinkResources) で、CI 配布用に **debug 鍵で署名**している (ストア配布時は差し替え)
+- release ビルドは R8 (minify + shrinkResources)。
+- **署名**: debug / release とも `app/signing/liquid-launcher.p12` (パスワード `liquidlauncher`、別名 `liquid`) で署名する (`signingConfigs.shared`)。
+  CI の既定の debug 鍵は実行ごとに作り直されるので、以前は署名が毎回変わり、上書き更新できなかった (「パッケージが競合」)。
+  鍵は公開リポジトリにあるため誰でも同じ署名を作れる。ストア配布時は非公開の鍵に置き換えること。
+- **versionCode** = `GITHUB_RUN_NUMBER` (ローカルビルドは 1)、versionName = `1.0.<実行番号>`。CI のビルドは常に新しい版として更新できる
 - `app/src/main/baseline-prof.txt`: 自アプリのコードをインストール時に事前コンパイル (profileinstaller は Compose の依存で入る)
 
 ## 5. ディレクトリ構成とファイルの役割
@@ -205,11 +209,18 @@ docs/screenshots.jpg  README 用スクリーンショット
 - スタイル: AUTOMATIC (ライト=DEFAULT/ダーク=DARK) / LIGHT(=DEFAULT) / DARK / CLEAR (ライト/ダーク/自動) / TINTED。`rememberIconSpec()` で解決。
 - 形状: SQUIRCLE (スーパー楕円 n=5) / ROUNDED_SQUARE / CIRCLE / TEARDROP / SQUARE / SYSTEM (マスクなし)。
 - アダプティブアイコンはレイヤー 108dp の中央 72dp を表示 (bounds を size/4 外側へ広げて描く)。
-- DARK/TINTED/CLEAR の記号:
+- TINTED/CLEAR (と DARK の一部) は「アルファに形と陰影を持つ単色マスク」を作って塗る (`mask`):
   1. モノクロレイヤー (Android 13+) があり、空でなければそれを使う
-  2. なければ `glyphMask`: 縁の画素の中央値を背景色とみなし、各画素の **色差** (加重 RGB 距離) を 98 パーセンタイルで正規化。
-     前景レイヤーが記号らしい覆い率 (2〜75%) ならその形も合成。透明背景のアイコンは形+明るさ。空なら形を 55% で使う (**絶対に消えない**)。
-  3. DARK で前景が暗い/空/全面絵柄なら抽出した記号を明るい色で描く。白い記号は背景色で着色。それ以外は前景をそのまま。
+  2. 前景レイヤーの覆い率が 2〜75% なら `layerMask(前景)`: **輝度を白の濃さにする** (絵柄の陰影・線が残る。iOS のクリアと同じ見え方)。
+     - 全体に暗い (平均輝度 < 0.45) と、98 パーセンタイル輝度で最大 2 倍に持ち上げ、暗部に最大 0.3 の下限を付ける
+     - 暗い記号 (平均輝度 < 0.25 かつ中間調 < 25%) は反転して記号を白くする (絵柄は反転しない)
+  3. 前景が空 (絵柄が背景レイヤー側) か全面なら、合成した全体で `opaqueMask`: 縁の中央値を背景色として色差を求め、
+     「背景色の画素 ≥ 30% かつ中間の色差 ≤ 20%」(単色の背景に記号) なら色差で記号を抜き出す。それ以外 (写真・絵柄) は輝度で描く (反転なし)
+  4. レガシーアイコンは全面なら `opaqueMask`、透明背景なら `layerMask`
+  5. どれもほぼ空なら形を 55% で使う (`ensureVisible`、**絶対に消えない**)
+  - DARK は前景が暗い/空ならマスクを明るい色で描く。白い記号は背景色で着色。それ以外は前景をそのまま。
+  - **前景レイヤーの「形」を単色で塗りつぶさないこと**。絵柄のアイコン (ゲームなど) が白い塊になって見分けられなくなる
+    (75c4880〜dd32fda の不具合。ユーザー報告: エンドフィールドのアイコン)。
 - クリアスタイルではアイコンの下にガラス (`liquidGlass`) を敷く (AppIconImage)。
 - キャッシュ: LruCache (最大 maxMemory/8、8〜64MB)。キー `"<appId>|style|shape|tint|pack|sizePx"`。描画後 **HARDWARE ビットマップ**へ変換。
   - パッケージ更新時は `invalidatePackage` でそのパッケージだけ破棄、ショートカット変更はショートカットアイコンだけ破棄、アイコンパック変更時は全破棄。
@@ -279,7 +290,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 - iOS のような屈折 (レンズ歪み) 表現はなく、ぼかし+ハイライト+縁で表現している。
 - ウィジェットの自由なサイズ変更 (S/M/L 以外) は未対応。ドックのページ化は未対応。
 - 写真壁紙の位置調整 (ピンチ/移動) は未対応 (中央で切り抜き)。
-- release 署名は debug 鍵。
+- 署名は公開リポジトリ内の固定鍵 (配布用としては安全でない。4 章参照)。
 
 ## 9. 既知の不具合・注意点
 
@@ -288,6 +299,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 - フォルダやメニューの拡大/縮小アニメーション中、ガラスの背景位置は拡大率を考慮しない (一瞬ずれる程度)。
 - メニュー・シート等のガラスは壁紙だけを写す (背後のアイコンは写らない。背後のコンテンツ自体は Modifier.blur でぼかしている)。
 - `FrameRateController` は端末のシステム設定 (例: 60Hz 固定) を超えることはできない。
+- 署名鍵を固定する前 (75a7b93 以前) のビルドから更新するときは、署名が違うので一度アンインストールが必要 (以後は上書き更新できる)。
+- クリア/色合いアイコンの見え方 (絵柄のアイコンなど) は実機の様々なアプリでは未確認。新しい種類で見分けにくいものがあれば 6.7 の判定を調整する。
 - スモークテストで SystemUI のクラッシュが出ることがある (Pixel Launcher 無効化の副作用、本アプリとは無関係)。
 - スモークテストの `drag_to` (`input draganddrop`) は長押し時間 (400ms) ちょうどで指を動かし始め、アプリの長押し判定 (400ms) と競合する。
   そのため結果がタイミングに左右されることがある (75c4880 の実行では 2 回のドラッグがメニュー表示のまま失敗、同じコードの 6c8fe9f では成功)。
@@ -309,6 +322,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 6c8fe9f | DEVELOPMENT_NOTES.md・CLAUDE.md・tools/ を追加 |
 | 278da56 | スモークテストに `hold_then_drag` (長押しでメニューが出てから指を動かす、人の操作の間合い) を追加 |
 | dd32fda | **長押しメニュー表示後にドラッグへ移行できない不具合の修正** (`homeVerticalSwipe` を付け外ししない)、FrameRateController の無駄な relayout 削減 |
+| 75a7b93 | dd32fda の検証結果を記録 |
+| (次のコミット) | **絵柄のアイコンがクリア/色合いで白い塊になる不具合の修正** (前景は輝度で描く)、**署名鍵の固定** (上書き更新できない問題の修正)、versionCode を CI の実行番号に |
 
 ### dd32fda の検証結果 (2026-10-24)
 - Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。

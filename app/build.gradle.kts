@@ -15,14 +15,30 @@ android {
         applicationId = "com.aa.launcher"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI では実行番号を使い、ビルドのたびに新しい版として上書き更新できるようにする (ローカルビルドは 1)
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = runNumber ?: 1
+        versionName = "1.0." + (runNumber ?: 0)
+    }
+
+    signingConfigs {
+        // debug / release とも、リポジトリに置いた同じ鍵で署名する。
+        // CI の既定の debug 鍵は実行ごとに作り直されるため、署名が毎回変わって上書き更新できなかった。
+        // 鍵は公開リポジトリにあるので誰でも同じ署名を作れる。ストア配布時は非公開の鍵に置き換えること。
+        create("shared") {
+            storeFile = file("signing/liquid-launcher.p12")
+            storeType = "pkcs12"
+            storePassword = "liquidlauncher"
+            keyAlias = "liquid"
+            keyPassword = "liquidlauncher"
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            signingConfig = signingConfigs.getByName("shared")
         }
         release {
             isMinifyEnabled = true
@@ -31,9 +47,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // CI ビルドした APK をそのままインストールできるよう debug 鍵で署名する。
-            // ストア配布時は独自の署名設定に置き換えること。
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("shared")
         }
     }
 
