@@ -197,9 +197,10 @@ fun SettingsGroup(
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 22.dp)) {
         if (header != null) {
             Text(
-                header.uppercase(),
+                header,
                 color = SettingsColors.secondary(),
-                fontSize = 13.sp,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(start = 16.dp, bottom = 7.dp),
             )
         }

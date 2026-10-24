@@ -35,16 +35,26 @@ for n in root.iter("node"):
 PY
 }
 
+find_text_retry() {
+  local xy="" i
+  for i in 1 2 3; do
+    xy=$(find_text "$1")
+    [ -n "$xy" ] && break
+    sleep 2
+  done
+  echo "$xy"
+}
+
 tap_text() {
   local xy
-  xy=$(find_text "$1")
+  xy=$(find_text_retry "$1")
   echo "tap '$1' -> ${xy:-not found}"
   [ -n "$xy" ] && adb shell input tap $xy
 }
 
 long_press_text() {
   local xy
-  xy=$(find_text "$1")
+  xy=$(find_text_retry "$1")
   echo "long press '$1' -> ${xy:-not found}"
   [ -n "$xy" ] && adb shell input swipe $xy $xy 900
 }
@@ -73,10 +83,17 @@ drag_to() {
 setup_app() {
   adb install -r -g app/build/outputs/apk/debug/app-debug.apk
   adb shell cmd package set-home-activity "$PKG/com.aa.launcher.MainActivity" || true
+  # 標準ランチャーが起動直後に ANR ダイアログを出して操作を妨げるので無効化する
+  adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1 || true
   adb shell cmd notification allow_listener "$PKG/com.aa.launcher.service.BadgeNotificationListener" || true
   adb logcat -c
   adb shell am start -W -n "$PKG/com.aa.launcher.MainActivity"
-  sleep 10
+  sleep 12
+  # それでも ANR ダイアログが出ていたら閉じる
+  local xy
+  xy=$(find_text "Close app")
+  if [ -n "$xy" ]; then adb shell input tap $xy; sleep 3; fi
 }
 
 print_logs() {
