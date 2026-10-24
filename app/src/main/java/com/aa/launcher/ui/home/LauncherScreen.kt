@@ -142,6 +142,7 @@ fun LauncherScreen(vm: LauncherViewModel) {
                     .onSizeChanged {
                         screen = it
                         vm.drag.screenWidth = it.width.toFloat()
+                        vm.drag.edgeWidth = 28f * context.resources.displayMetrics.density
                     }
                     .dragTracking(vm) { vm.endDrag(context) },
             ) {
