@@ -73,10 +73,18 @@ except Exception as e:
 }
 
 
-# 長押ししてからドラッグして離す (input draganddrop は長押し時間だけ待ってから移動する)。
+# 長押ししてからドラッグして離す。押したまま 0.9 秒待って (メニューが出る) から 10 段階で移動し、
+# 目的地で 1.2 秒止まってから離す (フォルダ化は 420ms の滞在が必要)。
+# input draganddrop は長押し時間 (400ms) ちょうどで動き始め、アプリの長押し判定と競合して結果が揺れるので使わない。
 drag_to() {
-  local x1=$1 y1=$2 x2=$3 y2=$4 duration=${5:-2500}
-  adb shell input draganddrop "$x1" "$y1" "$x2" "$y2" "$duration"
+  local x1=$1 y1=$2 x2=$3 y2=$4 i
+  adb shell input motionevent DOWN "$x1" "$y1"
+  sleep 0.9
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    adb shell input motionevent MOVE "$((x1 + (x2 - x1) * i / 10))" "$((y1 + (y2 - y1) * i / 10))"
+  done
+  sleep 1.2
+  adb shell input motionevent UP "$x2" "$y2"
 }
 
 # 人の操作と同じ間合いの長押し → ドラッグ: 押したまま待ち (メニューが出る)、少し後で指を動かす。

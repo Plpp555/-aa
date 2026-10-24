@@ -20,7 +20,7 @@ A=$(find_text "YouTube"); B=$(find_text "YT Music")
 echo "YouTube=$A YTMusic=$B"
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
-  drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))" 3000
+  drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))"
   shot 14_folder_open 2
   dump_texts folder
   adb shell input keyevent KEYCODE_BACK
@@ -32,7 +32,7 @@ fi
 A=$(find_text "Maps"); B=$(find_text "Calendar")
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
-  drag_to "$1" "$(($2 - 90))" "$(($3 - 60))" "$(($4 - 90))" 2000
+  drag_to "$1" "$(($2 - 90))" "$(($3 - 100))" "$(($4 - 90))"
   sleep 1
   tap_text "Done"
   shot 16_reordered 2
