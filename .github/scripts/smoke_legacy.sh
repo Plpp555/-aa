@@ -33,6 +33,12 @@ sleep 2
 adb shell input swipe 300 500 950 500 150
 shot L03c_today_fast_widget 3
 dump_texts today_c
+# 最初と同じスワイプ (アイコンの上から開始) をもう一度
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+adb shell input swipe 150 1300 900 1300 250
+shot L03d_today_same_as_first 3
+dump_texts today_d
 
 adb shell input keyevent KEYCODE_HOME
 sleep 2
