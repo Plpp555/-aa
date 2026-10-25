@@ -16,6 +16,17 @@ dump_texts home
 adb shell input swipe 150 1300 900 1300 250
 shot L03_today 3
 dump_texts today
+# 右スワイプの切り分け (開始位置と速さを変える)
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+adb shell input swipe 100 1950 1000 1950 400
+shot L03b_today_slow_low 3
+dump_texts today_b
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+adb shell input swipe 300 500 950 500 150
+shot L03c_today_fast_widget 3
+dump_texts today_c
 
 adb shell input keyevent KEYCODE_HOME
 sleep 2

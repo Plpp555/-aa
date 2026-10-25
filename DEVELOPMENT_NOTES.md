@@ -274,6 +274,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 写真の読み込み | ImageDecoder (9) | BitmapFactory + EXIF (androidx.exifinterface) で回転 |
 | システム壁紙の設定 | ホーム/ロック別 (7.0) | 両方に 1 枚 (ボタンは「両方」だけ表示) |
 | 壁紙の色 | WallpaperColors (8.1) | 既定の灰色 |
+| システム壁紙の変更検知 | addOnColorsChangedListener (8.1) | `ACTION_WALLPAPER_CHANGED` ブロードキャスト |
 | 通知バッジの非表示設定 | Ranking.canShowBadge (8.0) | すべて表示 |
 | テーマ | Theme.DeviceDefault.DayNight (10) | values / values-night の `Base.Theme.Launcher` (Light / 通常) で同等 |
 | アプリアイコン | adaptive-icon (8.0)、ベクターのグラデーション (7.0) | `mipmap/` の layer-list、`drawable/` の単色背景 (7.0 以降は `drawable-v24/` のグラデーション) |
@@ -359,7 +360,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 8c3dcb2 | スモークテストの `drag_to` を motionevent 方式に (draganddrop のタイミング競合をなくす)。フォルダ作成・並べ替え・長押し後ドラッグ・クリアアイコンすべて成功を確認 |
 | 6e4440e | 8c3dcb2 の検証結果を記録 |
 | 6f74508 | **Android 6.0 (API 23) 対応** (minSdk 29 → 23)。新しい API の分岐と代替、旧バージョン用のテーマ・アプリアイコン、CI に lint (NewApi) と API 23 エミュレータのテスト |
-| (次のコミット) | lint の指摘を修正 (`HashMap.putIfAbsent` は API 24 → Kotlin の `getOrPut`)、lint 失敗時にレポートをログへ出す |
+| 07567a4 | lint の指摘を修正 (`HashMap.putIfAbsent` は API 24 → Kotlin の `getOrPut`)、lint 失敗時にレポートをログへ出す |
+| (次のコミット) | lint の残り: システム壁紙の変更検知 (`addOnColorsChangedListener` は 8.1 以降、それより前は `ACTION_WALLPAPER_CHANGED`)。API 23 のスモークで右スワイプの切り分けを追加 |
 
 ### dd32fda の検証結果 (2026-10-24)
 - Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。

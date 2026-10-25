@@ -1,7 +1,10 @@
 package com.aa.launcher.core
 
 import android.app.WallpaperManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -197,10 +200,20 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
     private var currentBuiltin = 0
 
     init {
+        // システム壁紙の変更を検知する。リスナーは Android 8.1 以降、それより前は壁紙変更のブロードキャスト
+        val onChanged = { if (currentSource == WallpaperSource.SYSTEM) refresh(currentSource, currentBuiltin, force = true) }
         runCatching {
-            WallpaperManager.getInstance(context).addOnColorsChangedListener({ _, _ ->
-                if (currentSource == WallpaperSource.SYSTEM) refresh(currentSource, currentBuiltin, force = true)
-            }, Handler(Looper.getMainLooper()))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                WallpaperManager.getInstance(context).addOnColorsChangedListener({ _, _ -> onChanged() }, Handler(Looper.getMainLooper()))
+            } else {
+                @Suppress("DEPRECATION")
+                context.registerReceiver(
+                    object : BroadcastReceiver() {
+                        override fun onReceive(c: Context?, intent: Intent?) = onChanged()
+                    },
+                    IntentFilter(Intent.ACTION_WALLPAPER_CHANGED),
+                )
+            }
         }
     }
 
