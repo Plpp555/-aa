@@ -226,9 +226,10 @@ private fun rememberEntries(vm: LauncherViewModel, state: ContextMenuState): Lis
     val shortcuts by produceState<List<Pair<ShortcutInfo, ImageBitmap?>>>(emptyList(), appId) {
         val key = appId?.let { ComponentKey.parse(it) } ?: return@produceState
         // App ショートカットは Android 7.1 以降
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return@produceState
-        value = withContext(Dispatchers.IO) {
-            app.appRepository.shortcuts(key).map { it to app.iconRepository.loadShortcut(it, spec) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            value = withContext(Dispatchers.IO) {
+                app.appRepository.shortcuts(key).map { it to app.iconRepository.loadShortcut(it, spec) }
+            }
         }
     }
     val close = { vm.contextMenu = null }

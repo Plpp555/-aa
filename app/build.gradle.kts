@@ -66,7 +66,6 @@ android {
         checkOnly += "NewApi"
         abortOnError = true
         textReport = true
-        textOutput = file("stdout")
     }
 
     packaging {

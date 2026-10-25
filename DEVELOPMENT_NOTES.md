@@ -280,6 +280,9 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 背後のぼかし | Modifier.blur (12) | ぼかしなし (従来から 10/11 も同じ) |
 | リフレッシュレート | View.requestedFrameRate (15) | preferredDisplayModeId (6.0〜) のみ |
 
+- Java 8 のコレクション API (`putIfAbsent`・`getOrDefault`・`computeIfAbsent`・`removeIf`・`List.sort`・`stream` など) は Android 7.0 以降。
+  Kotlin の拡張 (`getOrPut`・`getOrElse`・`removeAll`・`sortWith` など) を使う (lint の NewApi で検出される)。
+
 ### 6.11 権限・サービス
 - 権限: REQUEST_DELETE_PACKAGES, SET_WALLPAPER, EXPAND_STATUS_BAR, VIBRATE, USE_BIOMETRIC, READ_CONTACTS (実行時), ACCESS_NOTIFICATION_POLICY,
   SET_ALARM, WRITE_SETTINGS (特別アクセス), READ_EXTERNAL_STORAGE (≤API 32, システム壁紙の読み取り用)。
@@ -355,7 +358,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 50b85a0 | **絵柄のアイコンがクリア/色合いで白い塊になる不具合の修正** (前景は輝度で描く)、**署名鍵の固定** (上書き更新できない問題の修正)、versionCode を CI の実行番号に。エミュレータでクリア/ダーク/色合いの全アイコン表示を確認 |
 | 8c3dcb2 | スモークテストの `drag_to` を motionevent 方式に (draganddrop のタイミング競合をなくす)。フォルダ作成・並べ替え・長押し後ドラッグ・クリアアイコンすべて成功を確認 |
 | 6e4440e | 8c3dcb2 の検証結果を記録 |
-| (次のコミット) | **Android 6.0 (API 23) 対応** (minSdk 29 → 23)。新しい API の分岐と代替、旧バージョン用のテーマ・アプリアイコン、CI に lint (NewApi) と API 23 エミュレータのテスト |
+| 6f74508 | **Android 6.0 (API 23) 対応** (minSdk 29 → 23)。新しい API の分岐と代替、旧バージョン用のテーマ・アプリアイコン、CI に lint (NewApi) と API 23 エミュレータのテスト |
+| (次のコミット) | lint の指摘を修正 (`HashMap.putIfAbsent` は API 24 → Kotlin の `getOrPut`)、lint 失敗時にレポートをログへ出す |
 
 ### dd32fda の検証結果 (2026-10-24)
 - Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。

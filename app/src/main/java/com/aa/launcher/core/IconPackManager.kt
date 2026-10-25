@@ -78,7 +78,7 @@ class IconPackManager(private val context: Context) {
                 if (component != null && drawable != null) {
                     parseComponent(component)?.let { cn ->
                         map[cn.flattenToString()] = drawable
-                        map.putIfAbsent(cn.packageName, drawable)
+                        map.getOrPut(cn.packageName) { drawable }
                     }
                 }
             }
