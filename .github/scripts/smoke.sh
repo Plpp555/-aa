@@ -10,6 +10,14 @@ tap_text "Get Started"
 shot 02_home 4
 dump_texts home
 
+# 初回案内の直後に右スワイプで今日の表示へ移れるか (API 23 で失敗したため、API 34 でも確認する)
+sleep 2
+adb shell input swipe 150 1300 900 1300 250
+shot 02b_today_after_onboarding 3
+dump_texts today_after_onboarding
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+
 adb shell input swipe 900 1300 150 1300 250
 shot 03_page2 3
 

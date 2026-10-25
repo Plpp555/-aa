@@ -18,6 +18,10 @@ sleep 2
 adb shell input swipe 150 1300 900 1300 250
 shot L03_today 3
 dump_texts today
+# ホームボタンを押す前に、別の位置からもう一度右スワイプ
+adb shell input swipe 100 1950 1000 1950 400
+shot L03a_today_second_before_home 3
+dump_texts today_a
 # 右スワイプの切り分け (開始位置と速さを変える)
 adb shell input keyevent KEYCODE_HOME
 sleep 2
