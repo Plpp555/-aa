@@ -13,6 +13,8 @@ tap_text "Get Started"
 shot L02_home 4
 dump_texts home
 
+# API 23 では uiautomator のダンプ直後の入力が届かないことがあるので少し待つ
+sleep 2
 adb shell input swipe 150 1300 900 1300 250
 shot L03_today 3
 dump_texts today
@@ -46,7 +48,8 @@ adb shell input keyevent KEYCODE_BACK
 adb shell input keyevent KEYCODE_HOME
 sleep 2
 
-long_press_text "Settings"
+# API 23 のイメージは App が多く「Settings」が 2 ページ目になるので、1 ページ目の Gmail で確認する
+long_press_text "Gmail"
 shot L06_context_menu 2
 dump_texts menu
 tap_text "Edit Home Screen"
