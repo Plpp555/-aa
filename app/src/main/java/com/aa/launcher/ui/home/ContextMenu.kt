@@ -2,6 +2,7 @@ package com.aa.launcher.ui.home
 
 import android.app.Activity
 import android.content.pm.ShortcutInfo
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
@@ -224,6 +225,8 @@ private fun rememberEntries(vm: LauncherViewModel, state: ContextMenuState): Lis
     val spec = rememberPlainIconSpec()
     val shortcuts by produceState<List<Pair<ShortcutInfo, ImageBitmap?>>>(emptyList(), appId) {
         val key = appId?.let { ComponentKey.parse(it) } ?: return@produceState
+        // App ショートカットは Android 7.1 以降
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return@produceState
         value = withContext(Dispatchers.IO) {
             app.appRepository.shortcuts(key).map { it to app.iconRepository.loadShortcut(it, spec) }
         }
@@ -251,11 +254,13 @@ private fun rememberEntries(vm: LauncherViewModel, state: ContextMenuState): Lis
         if (appId != null) {
             val label = vm.appsById.value[appId]?.label.orEmpty()
             val key = ComponentKey.parse(appId)
-            shortcuts.forEach { (info, bmp) ->
-                add(MenuEntry(info.shortLabel?.toString() ?: info.longLabel?.toString().orEmpty(), bitmap = bmp) {
-                    close()
-                    app.appRepository.startShortcut(info, null)
-                })
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                shortcuts.forEach { (info, bmp) ->
+                    add(MenuEntry(info.shortLabel?.toString() ?: info.longLabel?.toString().orEmpty(), bitmap = bmp) {
+                        close()
+                        app.appRepository.startShortcut(info, null)
+                    })
+                }
             }
             if (shortcuts.isNotEmpty()) add(null)
             if (target !is MenuTarget.LibraryApp && !settings.lockLayout) {

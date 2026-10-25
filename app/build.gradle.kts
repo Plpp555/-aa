@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aa.launcher"
-        minSdk = 29
+        minSdk = 23
         targetSdk = 36
         // CI では実行番号を使い、ビルドのたびに新しい版として上書き更新できるようにする (ローカルビルドは 1)
         val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
@@ -61,6 +61,14 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // Android 6.0 (API 23) 対応の確認: minSdk より新しい API を分岐なしで呼んでいたらエラーにする
+        checkOnly += "NewApi"
+        abortOnError = true
+        textReport = true
+        textOutput = file("stdout")
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
@@ -78,6 +86,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.datastore)
+    implementation(libs.androidx.exifinterface)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

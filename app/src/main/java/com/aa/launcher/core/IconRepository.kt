@@ -3,6 +3,8 @@ package com.aa.launcher.core
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
+import androidx.annotation.RequiresApi
 import android.content.pm.ShortcutInfo
 import android.util.LruCache
 import androidx.compose.runtime.Composable
@@ -62,6 +64,7 @@ class IconRepository(private val context: Context, private val apps: AppReposito
         bitmap
     }
 
+    @RequiresApi(Build.VERSION_CODES.N_MR1)
     suspend fun loadShortcut(info: ShortcutInfo, spec: IconSpec): ImageBitmap? = withContext(dispatcher) {
         val k = key("shortcut:${info.`package`}/${info.id}", spec)
         cache.get(k)?.let { return@withContext it }
@@ -76,8 +79,10 @@ class IconRepository(private val context: Context, private val apps: AppReposito
     /**
      * 描画済みアイコンを GPU 上の HARDWARE ビットマップへ移す。
      * Java ヒープを使わず、描画のたびのテクスチャ転送も不要になる (表示品質は同じ)。
+     * HARDWARE は Android 8.0 以降。それより前は通常のビットマップのまま使う。
      */
     private fun Bitmap.toGpu(): Bitmap {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return this
         val hw = runCatching { copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: return this
         recycle()
         return hw

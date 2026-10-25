@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Launcher" parent="android:Theme.DeviceDefault.DayNight">
+    <!-- ライト/ダークの切り替えは values-night の Base で行う (Theme.DeviceDefault.DayNight は Android 10 以降のため) -->
+    <style name="Base.Theme.Launcher" parent="android:Theme.DeviceDefault.Light" />
+
+    <style name="Theme.Launcher" parent="Base.Theme.Launcher">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

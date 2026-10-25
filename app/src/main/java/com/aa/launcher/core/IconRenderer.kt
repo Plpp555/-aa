@@ -15,6 +15,7 @@ import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
 import com.aa.launcher.settings.IconShape
@@ -52,7 +53,8 @@ object IconRenderer {
         val clip = if (fromIconPack) null else IconShapes.path(shape, size.toFloat())
         val save = canvas.save()
         clip?.let { canvas.clipPath(it) }
-        if (drawable is AdaptiveIconDrawable && !fromIconPack) {
+        // アダプティブアイコンは Android 8.0 以降。それより前のアイコンはすべてレガシー扱い
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable && !fromIconPack) {
             drawAdaptive(canvas, drawable, style, size, tint)
         } else {
             drawLegacy(canvas, drawable, style, size, tint, clipped = clip != null)
@@ -61,6 +63,7 @@ object IconRenderer {
         return out
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun drawAdaptive(canvas: Canvas, d: AdaptiveIconDrawable, style: RenderStyle, size: Int, tint: Int) {
         // アダプティブアイコンのレイヤーは 108dp で、表示領域は中央 72dp (2/3)
         val inset = size / 4

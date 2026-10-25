@@ -7,7 +7,6 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.Intent
-import android.content.pm.LauncherApps
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -51,7 +50,7 @@ class WidgetHostManager(private val activity: ComponentActivity) {
     }
 
     fun providers(): List<AppWidgetProviderInfo> {
-        val profiles = runCatching { activity.getSystemService(LauncherApps::class.java).profiles }.getOrDefault(emptyList())
+        val profiles = runCatching { activity.userProfiles() }.getOrDefault(emptyList())
         return profiles.flatMap { runCatching { manager.getInstalledProvidersForProfile(it) }.getOrDefault(emptyList()) }
     }
 

@@ -154,6 +154,7 @@
     <string name="error_launch_failed">App を開けませんでした</string>
     <string name="error_generic">問題が発生しました</string>
     <string name="error_no_app">この操作に対応する App がありません</string>
+    <string name="toast_lock_screen_unsupported">ジェスチャーからの画面ロックには Android 9 以降が必要です</string>
     <string name="toast_enable_accessibility">ユーザー補助の設定で「Liquid Launcher ジェスチャー」をオンにしてください</string>
     <string name="toast_no_screen_lock">App を保護するには画面ロックを設定してください</string>
     <string name="auth_subtitle">生体認証または画面ロックを使用</string>

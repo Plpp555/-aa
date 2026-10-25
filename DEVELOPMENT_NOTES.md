@@ -29,7 +29,8 @@
 5. 既定値の見た目は変えない (例: Liquid Glass の既定 0.3 は従来と同じ見た目になるようにカーブを合わせてある)。
 6. 変更したら **CI でビルド** → **エミュレータのスモークテストでスクリーンショット確認**。クラッシュがないことを確認してから完了とする。
 7. 文字列は必ず英語 (`values/strings.xml`) と日本語 (`values-ja/strings.xml`) の両方に追加し、`python3 tools/check_strings.py` で確認。
-8. コミットメッセージは英語。末尾に Co-Authored-By / Claude-Session の行 (システムの指示に従う)。モデル名をリポジトリ内に書かない。
+8. **Android 6.0 (API 23) 以降で動くこと**。新しい API は `SDK_INT` で分岐し、古い端末では同等の代替か機能を出さない (6.10 参照)。描画方式・最適化は全バージョン共通。
+9. コミットメッセージは英語。末尾に Co-Authored-By / Claude-Session の行 (システムの指示に従う)。モデル名をリポジトリ内に書かない。
 
 ## 3. 作業の始め方 (新しいセッション向け)
 
@@ -45,8 +46,8 @@
 ### 3.2 CI (GitHub Actions)
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、APK を Artifact `liquid-launcher-apk` にアップロード |
-| `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh` を別ジョブで実行 |
+| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、APK を Artifact `liquid-launcher-apk` にアップロード、その後 `lintDebug` (NewApi のみ) |
+| `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
 
 - 実行状況は `curl -s https://api.github.com/repos/Plpp555/-aa/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
 - 待機は `until ...; do sleep 30; done` を `run_in_background` で実行するのが良い (フォアグラウンドの sleep は不可)。
@@ -60,6 +61,8 @@
   `drag_to` (`input motionevent` で 0.9 秒押す → 10 段階で移動 → 目的地で 1.2 秒止まって離す)、
   `hold_then_drag` (`input motionevent` で 1.2 秒押したまま → 動かす → 離す前に "Done" の有無で `HOLD_DRAG ...: drag started / no drag` を出力)、`setup_app` (インストール、ホーム設定、Pixel Launcher 無効化、初回起動)、`print_logs`。
 - `smoke.sh`: 初回案内 → ホーム → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター → 設定 → 色合いアイコン。
+- `smoke_legacy.sh` (API 23): ホーム → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
+  アイコンのスタイル (クリア/色合い/ダーク) → 壁紙設定。API 23 にない `input motionevent` / `cmd` は使わない (Launcher3 を無効化してホームにする)。
 - `smoke2.sh`: 揺れオフ → ドラッグでフォルダ作成 → 並べ替え → 長押しメニュー後のドラッグ (Photos) → ウィジェット追加 → カスタマイズ (クリア) → ダーク → 壁紙 → フォルダ → 日本語。
 - 注意:
   - 以前は「`input motionevent` はイベントごとに downTime が変わるため長押し→ドラッグに使えない」としていたが、
@@ -74,7 +77,8 @@
 - AGP 8.13.0 / Gradle 8.14.3 (wrapper) / Kotlin 2.2.21 (Compose Compiler プラグイン・Serialization プラグイン)
 - Compose BOM 2025.08.00 (Compose 1.9 系)、Material3、material-icons-extended 1.7.8
 - androidx.core-ktx 1.16.0、activity-compose 1.10.1、lifecycle 2.9.2、datastore 1.1.7、kotlinx-serialization-json 1.9.0
-- compileSdk 36 / targetSdk 36 / minSdk 29、JDK 17
+- compileSdk 36 / targetSdk 36 / **minSdk 23 (Android 6.0)**、JDK 17。androidx.exifinterface 1.3.7 (Android 8.1 以前の写真の向き)
+- lint は `NewApi` だけを検査し、エラーでビルド失敗 (`lint { checkOnly += "NewApi" }`)。minSdk より新しい API は必ず `Build.VERSION.SDK_INT` で分岐するか `@RequiresApi` を付ける
 - release ビルドは R8 (minify + shrinkResources)。
 - **署名**: debug / release とも `app/signing/liquid-launcher.p12` (パスワード `liquidlauncher`、別名 `liquid`) で署名する (`signingConfigs.shared`)。
   CI の既定の debug 鍵は実行ごとに作り直されるので、以前は署名が毎回変わり、上書き更新できなかった (「パッケージが競合」)。
@@ -253,7 +257,30 @@ docs/screenshots.jpg  README 用スクリーンショット
   controlcenter, accessibility, backup, about。**ルート指定で開くときは FLAG_ACTIVITY_CLEAR_TASK** を付ける (既存タスクがあると指定が無視されるため)。
 - 「設定に認証を要求」がオンなら起動時に AppLock 認証。
 
-### 6.10 権限・サービス
+### 6.10 Android のバージョン対応 (minSdk 23)
+描画方式 (Liquid Glass、CPU のぼかしで作る背景、アイコン描画) と最適化は全バージョン共通。新しい API だけ分岐している:
+
+| 機能 | 新しい API (必要なバージョン) | それより前 |
+| --- | --- | --- |
+| アイコン | AdaptiveIconDrawable (8.0) / モノクロ (13) | すべてレガシーアイコンとして描画 (`drawLegacy`) |
+| ビットマップ | HARDWARE (8.0) | 通常のビットマップのまま (見た目は同じ、メモリはヒープ) |
+| App ショートカット | LauncherApps.ShortcutQuery (7.1) | メニューに出さない |
+| ユーザー一覧 | LauncherApps.getProfiles (8.0) | UserManager.getUserProfiles (`Context.userProfiles()`) |
+| App のカテゴリ | ApplicationInfo.category (8.0) | パッケージ名のキーワードで推定 |
+| 既定のホーム | RoleManager (10) | HOME の解決結果で判定、ホーム設定画面を開く |
+| 認証 | BiometricPrompt + 画面ロック (10) | KeyguardManager の画面ロック確認画面 (`confirmDeviceCredential`) |
+| 画面ロック (ジェスチャー) | GLOBAL_ACTION_LOCK_SCREEN (9) | 非対応のトースト |
+| 設定パネル | Settings.Panel (10) | 通常の設定画面 |
+| 写真の読み込み | ImageDecoder (9) | BitmapFactory + EXIF (androidx.exifinterface) で回転 |
+| システム壁紙の設定 | ホーム/ロック別 (7.0) | 両方に 1 枚 (ボタンは「両方」だけ表示) |
+| 壁紙の色 | WallpaperColors (8.1) | 既定の灰色 |
+| 通知バッジの非表示設定 | Ranking.canShowBadge (8.0) | すべて表示 |
+| テーマ | Theme.DeviceDefault.DayNight (10) | values / values-night の `Base.Theme.Launcher` (Light / 通常) で同等 |
+| アプリアイコン | adaptive-icon (8.0)、ベクターのグラデーション (7.0) | `mipmap/` の layer-list、`drawable/` の単色背景 (7.0 以降は `drawable-v24/` のグラデーション) |
+| 背後のぼかし | Modifier.blur (12) | ぼかしなし (従来から 10/11 も同じ) |
+| リフレッシュレート | View.requestedFrameRate (15) | preferredDisplayModeId (6.0〜) のみ |
+
+### 6.11 権限・サービス
 - 権限: REQUEST_DELETE_PACKAGES, SET_WALLPAPER, EXPAND_STATUS_BAR, VIBRATE, USE_BIOMETRIC, READ_CONTACTS (実行時), ACCESS_NOTIFICATION_POLICY,
   SET_ALARM, WRITE_SETTINGS (特別アクセス), READ_EXTERNAL_STORAGE (≤API 32, システム壁紙の読み取り用)。
 - `<queries>`: ランチャー App、https 閲覧、カメラ、計算機、カレンダー、各アイコンパックの intent。
@@ -291,6 +318,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 - ウィジェットの自由なサイズ変更 (S/M/L 以外) は未対応。ドックのページ化は未対応。
 - 写真壁紙の位置調整 (ピンチ/移動) は未対応 (中央で切り抜き)。
 - 署名は公開リポジトリ内の固定鍵 (配布用としては安全でない。4 章参照)。
+- Android のバージョンによる違い (6.10 参照): 8.0 未満はアダプティブアイコンがなく、7.1 未満は App ショートカットなし、
+  9 未満はジェスチャーからの画面ロック不可、6.0 はホーム/ロック画面の壁紙を別々に設定できない、12 未満は背後のコンテンツのぼかし (Modifier.blur) なし。
 
 ## 9. 既知の不具合・注意点
 
@@ -325,6 +354,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 75a7b93 | dd32fda の検証結果を記録 |
 | 50b85a0 | **絵柄のアイコンがクリア/色合いで白い塊になる不具合の修正** (前景は輝度で描く)、**署名鍵の固定** (上書き更新できない問題の修正)、versionCode を CI の実行番号に。エミュレータでクリア/ダーク/色合いの全アイコン表示を確認 |
 | 8c3dcb2 | スモークテストの `drag_to` を motionevent 方式に (draganddrop のタイミング競合をなくす)。フォルダ作成・並べ替え・長押し後ドラッグ・クリアアイコンすべて成功を確認 |
+| 6e4440e | 8c3dcb2 の検証結果を記録 |
+| (次のコミット) | **Android 6.0 (API 23) 対応** (minSdk 29 → 23)。新しい API の分岐と代替、旧バージョン用のテーマ・アプリアイコン、CI に lint (NewApi) と API 23 エミュレータのテスト |
 
 ### dd32fda の検証結果 (2026-10-24)
 - Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。

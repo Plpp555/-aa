@@ -95,7 +95,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 ## ビルド
 
-要件: JDK 17 以上、Android SDK (compileSdk 36)。
+要件: JDK 17 以上、Android SDK (compileSdk 36)。対応 OS は **Android 6.0 以降** (minSdk 23)。
 
 ```bash
 ./gradlew assembleDebug      # app/build/outputs/apk/debug/
@@ -105,7 +105,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 GitHub Actions (`.github/workflows/android.yml`) が push のたびに debug / release の APK をビルドし、
 Artifacts (`liquid-launcher-apk`) としてアップロードします。
 
-また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34) 上で実際にランチャーを起動し、
+また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34 と、Android 6.0 の API 23) 上で実際にランチャーを起動し、
 初回案内 → ホーム画面 → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
 設定画面、さらにドラッグでのフォルダ作成・ウィジェット追加・ダークモード・壁紙変更・日本語表示までを操作して、
 画面のテキストとクラッシュログを出力します (`.github/scripts/smoke*.sh`)。
@@ -150,3 +150,6 @@ app/src/main/java/com/aa/launcher/
 - Android では他のアプリから Wi-Fi・Bluetooth などを直接切り替えられないため、コントロールセンターの通信系ボタンはシステムのパネルを開きます
 - Android 13 以降はシステム壁紙の画像を読み取れないことが多く、その場合ガラスの背景ぼかしは使えません。内蔵壁紙か写真を選ぶとぼかしが有効になります
 - App ショートカットはデフォルトのホームアプリに設定しているときのみ表示されます
+- 古い Android では一部の機能が使えません: App ショートカット (7.1 以降)、ジェスチャーからの画面ロック (9 以降)、
+  ホーム画面とロック画面への別々の壁紙設定 (7.0 以降)、メニュー表示中の背後のぼかし (12 以降)。
+  Android 8.0 未満ではアダプティブアイコンがないため、アイコンは従来形式のものとして描画します

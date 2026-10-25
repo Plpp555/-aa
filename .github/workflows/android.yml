@@ -33,3 +33,8 @@ jobs:
           name: liquid-launcher-apk
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+      # APK のアップロード後に実行 (失敗してもジョブは赤になるが APK は取得できる)。
+      # minSdk (Android 6.0) より新しい API を分岐なしで呼んでいないか (NewApi) を確認する
+      - name: Lint (NewApi)
+        run: ./gradlew --no-daemon lintDebug

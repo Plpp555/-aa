@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Rect
@@ -18,6 +19,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
+import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -25,6 +27,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.scale
+import androidx.exifinterface.media.ExifInterface
 import com.aa.launcher.R
 import com.aa.launcher.settings.WallpaperSource
 import kotlinx.coroutines.CoroutineScope
@@ -240,8 +243,12 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
                 // Android 13 以降は権限がないと読めないことが多い。その場合はぼかし無しのガラスになる。
                 val drawable = runCatching { wm.drawable }.getOrNull()
                 val bmp = drawable?.let { d -> runCatching { centerCrop(d.toBitmap(), w / 2, h / 2) }.getOrNull() }
-                val colors = runCatching { wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull()
-                val primary = colors?.primaryColor?.toArgb() ?: 0xFF3A3A3C.toInt()
+                // 壁紙の色 (WallpaperColors) は Android 8.1 以降
+                val primary = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    runCatching { wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb() }.getOrNull()
+                } else {
+                    null
+                } ?: 0xFF3A3A3C.toInt()
                 if (bmp != null) {
                     fromBitmap(bmp, showImage = false)
                 } else {
@@ -267,8 +274,9 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         )
     }
 
-    /** 描画専用のビットマップを GPU メモリへ移す (Java ヒープの節約とテクスチャ転送の削減)。 */
-    private fun Bitmap.toGpu(): Bitmap = runCatching { copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: this
+    /** 描画専用のビットマップを GPU メモリへ移す (Java ヒープの節約とテクスチャ転送の削減)。HARDWARE は Android 8.0 以降。 */
+    private fun Bitmap.toGpu(): Bitmap =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) runCatching { copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: this else this
 
     private fun average(bmp: Bitmap): Int {
         val tiny = bmp.scale(1, 1)
@@ -300,16 +308,47 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
     suspend fun importPhoto(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val (w, h) = screenSize()
-            val source = ImageDecoder.createSource(context.contentResolver, uri)
-            val decoded = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                val s = max(w.toFloat() / info.size.width, h.toFloat() / info.size.height).coerceAtMost(1f)
-                decoder.setTargetSize((info.size.width * s).roundToInt().coerceAtLeast(1), (info.size.height * s).roundToInt().coerceAtLeast(1))
-            }
+            val decoded = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) decodeWithImageDecoder(uri, w, h) else decodeLegacy(uri, w, h) ?: return@runCatching false
             val cropped = centerCrop(decoded, w, h)
             customFile.outputStream().use { cropped.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             true
         }.getOrDefault(false)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun decodeWithImageDecoder(uri: Uri, w: Int, h: Int): Bitmap {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            val s = max(w.toFloat() / info.size.width, h.toFloat() / info.size.height).coerceAtMost(1f)
+            decoder.setTargetSize((info.size.width * s).roundToInt().coerceAtLeast(1), (info.size.height * s).roundToInt().coerceAtLeast(1))
+        }
+    }
+
+    /** Android 8.1 以前: BitmapFactory で縮小して読み、EXIF の向きを反映する (ImageDecoder は自動で反映する)。 */
+    private fun decodeLegacy(uri: Uri, w: Int, h: Int): Bitmap? {
+        val resolver = context.contentResolver
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+        val orientation = resolver.openInputStream(uri)?.use {
+            ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        } ?: ExifInterface.ORIENTATION_NORMAL
+        val swap = orientation == ExifInterface.ORIENTATION_ROTATE_90 || orientation == ExifInterface.ORIENTATION_ROTATE_270
+        val srcW = if (swap) bounds.outHeight else bounds.outWidth
+        val srcH = if (swap) bounds.outWidth else bounds.outHeight
+        var sample = 1
+        while (srcW / (sample * 2) >= w && srcH / (sample * 2) >= h) sample *= 2
+        val bmp = resolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return null
+        val degrees = when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+        if (degrees == 0f) return bmp
+        return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(degrees) }, true)
     }
 
     /** 現在のランチャー壁紙をシステム壁紙 (ホーム/ロック) にも設定する。 */
@@ -320,7 +359,9 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
                 WallpaperSource.CUSTOM -> decodeFile(customFile, w, h) ?: BuiltinWallpapers.render(builtin, w, h)
                 else -> BuiltinWallpapers.render(builtin, w, h)
             }
-            WallpaperManager.getInstance(context).setBitmap(bmp, null, true, flags)
+            val manager = WallpaperManager.getInstance(context)
+            // ホーム/ロックを分けて設定できるのは Android 7.0 以降 (6.0 は 1 枚の壁紙が両方に使われる)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) manager.setBitmap(bmp, null, true, flags) else manager.setBitmap(bmp)
             true
         }.getOrDefault(false)
     }

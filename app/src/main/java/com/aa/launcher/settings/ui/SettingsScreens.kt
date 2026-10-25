@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.WallpaperManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -297,8 +298,11 @@ private fun WallpaperContent(nav: SettingsNav) {
     val canApply = s.wallpaperSource != WallpaperSource.SYSTEM
     SettingsGroup(header = stringResource(R.string.wallpaper_apply_header), footer = stringResource(R.string.wallpaper_apply_footer)) {
         ButtonRow(stringResource(R.string.wallpaper_apply_both), { apply(WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK) }, enabled = canApply && !applying)
-        ButtonRow(stringResource(R.string.wallpaper_apply_home), { apply(WallpaperManager.FLAG_SYSTEM) }, enabled = canApply && !applying)
-        ButtonRow(stringResource(R.string.wallpaper_apply_lock), { apply(WallpaperManager.FLAG_LOCK) }, enabled = canApply && !applying)
+        // ホーム画面とロック画面を別々に設定できるのは Android 7.0 以降
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            ButtonRow(stringResource(R.string.wallpaper_apply_home), { apply(WallpaperManager.FLAG_SYSTEM) }, enabled = canApply && !applying)
+            ButtonRow(stringResource(R.string.wallpaper_apply_lock), { apply(WallpaperManager.FLAG_LOCK) }, enabled = canApply && !applying)
+        }
     }
 }
 

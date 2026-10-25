@@ -2,6 +2,7 @@ package com.aa.launcher.core
 
 import android.content.ComponentName
 import android.content.pm.ApplicationInfo
+import android.os.Build
 import android.os.UserHandle
 import androidx.annotation.StringRes
 import com.aa.launcher.R
@@ -79,7 +80,8 @@ object AppCategories {
     )
 
     fun categorize(info: ApplicationInfo): AppCategory {
-        when (info.category) {
+        // App が申告するカテゴリは Android 8.0 以降。それより前はパッケージ名から推定する
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) when (info.category) {
             ApplicationInfo.CATEGORY_GAME -> return AppCategory.GAMES
             ApplicationInfo.CATEGORY_AUDIO, ApplicationInfo.CATEGORY_VIDEO -> return AppCategory.ENTERTAINMENT
             ApplicationInfo.CATEGORY_IMAGE -> return AppCategory.CREATIVITY

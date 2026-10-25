@@ -113,6 +113,8 @@ setup_app() {
   adb shell cmd package set-home-activity "$PKG/com.aa.launcher.MainActivity" || true
   # 標準ランチャーが起動直後に ANR ダイアログを出して操作を妨げるので無効化する
   adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
+  # Android 6.0 のイメージは Launcher3 (cmd package set-home-activity がないので、無効化してホームの選択画面を出さない)
+  adb shell pm disable-user --user 0 com.android.launcher3 > /dev/null 2>&1 || true
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS > /dev/null 2>&1 || true
   adb shell cmd notification allow_listener "$PKG/com.aa.launcher.service.BadgeNotificationListener" || true
   adb logcat -c

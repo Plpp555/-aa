@@ -1,6 +1,7 @@
 package com.aa.launcher.service
 
 import android.app.Notification
+import android.os.Build
 import android.os.UserManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -56,8 +57,11 @@ class BadgeNotificationListener : NotificationListenerService() {
             val n = sbn.notification
             if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) continue
             if (sbn.isOngoing) continue
-            val rankingMap = currentRanking
-            if (rankingMap != null && rankingMap.getRanking(sbn.key, ranking) && !ranking.canShowBadge()) continue
+            // 「バッジを表示しない」設定 (通知チャネル) は Android 8.0 以降
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val rankingMap = currentRanking
+                if (rankingMap != null && rankingMap.getRanking(sbn.key, ranking) && !ranking.canShowBadge()) continue
+            }
             val serial = um.getSerialNumberForUser(sbn.user)
             val key = ComponentKey.packageKey(sbn.packageName, serial)
             val count = if (n.number > 0) n.number else 1

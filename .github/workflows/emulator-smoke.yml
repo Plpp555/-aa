@@ -11,7 +11,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [smoke.sh, smoke2.sh]
+        include:
+          - scenario: smoke.sh
+            api: 34
+          - scenario: smoke2.sh
+            api: 34
+          # Android 6.0 (minSdk) での動作確認
+          - scenario: smoke_legacy.sh
+            api: 23
     steps:
       - uses: actions/checkout@v5
 
@@ -41,7 +48,7 @@ jobs:
       - name: Run on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
           profile: pixel_6

@@ -8,6 +8,7 @@ import android.content.pm.ShortcutInfo
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +16,7 @@ import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import com.aa.launcher.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,7 +93,7 @@ class AppRepository(private val context: Context, private val scope: CoroutineSc
     private fun queryApps(): List<AppEntry> {
         val me = Process.myUserHandle()
         val result = ArrayList<AppEntry>()
-        for (user in launcherApps.profiles) {
+        for (user in context.userProfiles()) {
             val serial = userManager.getSerialNumberForUser(user)
             val activities = runCatching { launcherApps.getActivityList(null, user) }.getOrDefault(emptyList())
             for (info in activities) {
@@ -150,11 +152,13 @@ class AppRepository(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    fun hasShortcutPermission(): Boolean = runCatching { launcherApps.hasShortcutHostPermission() }.getOrDefault(false)
+    /** App ショートカットは Android 7.1 以降。 */
+    fun hasShortcutPermission(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1 && runCatching { launcherApps.hasShortcutHostPermission() }.getOrDefault(false)
 
-    /** iOS のクイックアクションに相当する App ショートカット。 */
+    /** iOS のクイックアクションに相当する App ショートカット (Android 7.1 以降。それより前は常に空)。 */
     fun shortcuts(key: ComponentKey): List<ShortcutInfo> {
-        if (!hasShortcutPermission()) return emptyList()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1 || !hasShortcutPermission()) return emptyList()
         val user = userFor(key.userSerial) ?: return emptyList()
         val query = LauncherApps.ShortcutQuery()
             .setPackage(key.packageName)
@@ -171,12 +175,25 @@ class AppRepository(private val context: Context, private val scope: CoroutineSc
             .take(4)
     }
 
+    @RequiresApi(Build.VERSION_CODES.N_MR1)
     fun startShortcut(info: ShortcutInfo, bounds: Rect?) {
         runCatching { launcherApps.startShortcut(info, bounds, null) }.onFailure {
             Toast.makeText(context, R.string.error_launch_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.N_MR1)
     fun shortcutIcon(info: ShortcutInfo): Drawable? =
         runCatching { launcherApps.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi) }.getOrNull()
 }
+
+/**
+ * 仕事用プロファイルを含むユーザー一覧。
+ * LauncherApps.getProfiles は Android 8.0 以降なので、それより前は UserManager.getUserProfiles (同じ内容) を使う。
+ */
+fun Context.userProfiles(): List<UserHandle> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        getSystemService(LauncherApps::class.java).profiles
+    } else {
+        getSystemService(UserManager::class.java).userProfiles
+    }

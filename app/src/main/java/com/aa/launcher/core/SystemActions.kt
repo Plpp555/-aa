@@ -21,6 +21,9 @@ import android.provider.AlarmClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import com.aa.launcher.R
 import com.aa.launcher.service.BadgeNotificationListener
@@ -69,6 +72,11 @@ object SystemActions {
     fun isAccessibilityEnabled(): Boolean = LauncherAccessibilityService.instance != null
 
     fun lockScreen(context: Context) {
+        // ユーザー補助からの画面ロックは Android 9 以降
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            Toast.makeText(context, R.string.toast_lock_screen_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
         val service = LauncherAccessibilityService.instance
         if (service != null) {
             service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
@@ -93,13 +101,18 @@ object SystemActions {
     // ---- 既定のホームアプリ -----------------------------------------------------
 
     fun isDefaultLauncher(context: Context): Boolean {
-        val role = context.getSystemService(RoleManager::class.java)
-        if (role != null && role.isRoleAvailable(RoleManager.ROLE_HOME)) return role.isRoleHeld(RoleManager.ROLE_HOME)
+        // RoleManager は Android 10 以降。それより前は HOME を解決した結果で判定する
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val role = context.getSystemService(RoleManager::class.java)
+            if (role != null && role.isRoleAvailable(RoleManager.ROLE_HOME)) return role.isRoleHeld(RoleManager.ROLE_HOME)
+        }
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return context.packageManager.resolveActivity(home, 0)?.activityInfo?.packageName == context.packageName
     }
 
+    /** 既定のホームアプリにする要求 (Android 10 以降)。null のときはホーム設定画面を開く。 */
     fun homeRoleIntent(context: Context): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val role = context.getSystemService(RoleManager::class.java) ?: return null
         return if (role.isRoleAvailable(RoleManager.ROLE_HOME) && !role.isRoleHeld(RoleManager.ROLE_HOME)) {
             role.createRequestRoleIntent(RoleManager.ROLE_HOME)
@@ -129,7 +142,12 @@ object SystemActions {
 
     // ---- パネル / 設定画面 -----------------------------------------------------
 
+    /** 設定パネル (Android 10 以降) を開く。それより前は通常の設定画面を開く。 */
     fun openPanel(context: Context, action: String, fallback: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            start(context, Intent(fallback))
+            return
+        }
         val ok = runCatching {
             context.startActivity(Intent(action).apply { if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         }.isSuccess
@@ -276,6 +294,10 @@ object AppLock {
             onSuccess()
             return
         }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            confirmDeviceCredential(activity, title, onSuccess)
+            return
+        }
         val builder = BiometricPrompt.Builder(activity)
             .setTitle(title)
             .setSubtitle(activity.getString(R.string.auth_subtitle))
@@ -294,6 +316,30 @@ object AppLock {
                 },
             )
         }.onFailure {
+            Toast.makeText(activity, R.string.error_generic, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Android 9 以前: 端末の画面ロック確認画面 (PIN / パターン / パスワード、端末によっては指紋も) で認証する。
+     * BiometricPrompt で画面ロックを使えるのは Android 10 以降のため。
+     */
+    @Suppress("DEPRECATION")
+    private fun confirmDeviceCredential(activity: Activity, title: String, onSuccess: () -> Unit) {
+        val km = activity.getSystemService(KeyguardManager::class.java)
+        val intent = km.createConfirmDeviceCredentialIntent(title, activity.getString(R.string.auth_subtitle))
+        val registry = (activity as? ComponentActivity)?.activityResultRegistry
+        if (intent == null || registry == null) {
+            onSuccess()
+            return
+        }
+        lateinit var launcher: ActivityResultLauncher<Intent>
+        launcher = registry.register("app_lock_" + System.nanoTime(), ActivityResultContracts.StartActivityForResult()) { result ->
+            launcher.unregister()
+            if (result.resultCode == Activity.RESULT_OK) onSuccess()
+        }
+        runCatching { launcher.launch(intent) }.onFailure {
+            launcher.unregister()
             Toast.makeText(activity, R.string.error_generic, Toast.LENGTH_SHORT).show()
         }
     }

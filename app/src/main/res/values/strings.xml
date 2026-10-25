@@ -156,6 +156,7 @@
     <string name="error_launch_failed">Couldn’t open the app</string>
     <string name="error_generic">Something went wrong</string>
     <string name="error_no_app">No app can handle this action</string>
+    <string name="toast_lock_screen_unsupported">Locking the screen from a gesture requires Android 9 or later</string>
     <string name="toast_enable_accessibility">Turn on “Liquid Launcher gestures” in Accessibility settings</string>
     <string name="toast_no_screen_lock">Set a screen lock to protect apps</string>
     <string name="auth_subtitle">Use biometrics or your screen lock</string>
