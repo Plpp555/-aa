@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # 大画面での確認。同じスクリプトを 2 つの端末で動かす:
 # - Pixel Tablet (横長): iPadOS と同じく 1 ページ表示。今日の表示は最大幅、App ライブラリは列が増えてフォルダはスマホ程度の大きさ
-# - Pixel Fold (開いた画面、ほぼ正方形): ホームを 2 ページ並べて表示し、2 ページ表示でもドラッグでフォルダを作れる
+# - 折りたたみを開いた画面 (FOLD_SIM=1): CI の SDK に Pixel Fold の定義がないため、タブレットの画面を
+#   Pixel Fold の内側の画面 (2208x1840, 420dpi) に切り替えて再現する。ホームを 2 ページ並べて表示し、ドラッグでフォルダを作れる
 # 座標は画面サイズの割合と画面密度から決める。
 set -u
 source "$(dirname "$0")/smoke_lib.sh"
 SHOT_WIDTH=640
 
+if [ "${FOLD_SIM:-0}" = 1 ]; then
+  adb shell wm size 2208x1840
+  adb shell wm density 420
+  sleep 3
+fi
 setup_app
 DENS=$(adb shell wm density | tr -d '\r' | grep -o '[0-9]*' | tail -1)
 DENS=${DENS:-320}
@@ -39,7 +45,8 @@ dump_texts library
 
 adb shell input keyevent KEYCODE_HOME
 sleep 2
-adb shell input swipe $((W * 94 / 100)) 30 $((W * 94 / 100)) $((H * 55 / 100)) 300
+# 画面の最上端から始めるとシステムの通知シェードが開くので、少し下から
+adb shell input swipe $((W * 94 / 100)) $((H * 9 / 100)) $((W * 94 / 100)) $((H * 60 / 100)) 300
 shot W04_control_center 3
 adb shell input keyevent KEYCODE_BACK
 sleep 1

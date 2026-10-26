@@ -26,9 +26,11 @@ jobs:
           - scenario: smoke_wide.sh
             api: 34
             profile: pixel_tablet
+          # Pixel Fold の定義は CI の SDK にないので、タブレットの画面サイズを Fold の内側の画面に変えて再現する
           - scenario: smoke_wide.sh
             api: 34
-            profile: pixel_fold
+            profile: pixel_tablet
+            fold: 1
     steps:
       - uses: actions/checkout@v5
 
@@ -64,4 +66,4 @@ jobs:
           profile: ${{ matrix.profile }}
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash .github/scripts/${{ matrix.scenario }}
+          script: FOLD_SIM=${{ matrix.fold || 0 }} bash .github/scripts/${{ matrix.scenario }}
