@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +68,7 @@ import com.aa.launcher.ui.common.onGlass
 import com.aa.launcher.ui.common.onGlassSecondary
 import com.aa.launcher.ui.glass.liquidGlass
 import com.aa.launcher.ui.home.LauncherViewModel
+import com.aa.launcher.ui.home.MaxPanelWidth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -127,6 +129,7 @@ private fun PickerContent(vm: LauncherViewModel) {
 
     Column(
         Modifier
+            .widthIn(max = MaxPanelWidth)
             .fillMaxWidth()
             .fillMaxHeight(0.86f)
             .liquidGlass(RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp), strength = 1.6f)
@@ -315,6 +318,7 @@ fun NoteEditorDialog(vm: LauncherViewModel) {
             Column(
                 Modifier
                     .padding(24.dp)
+                    .widthIn(max = MaxPanelWidth)
                     .fillMaxWidth()
                     .liquidGlass(RoundedCornerShape(28.dp), tint = Color(0xFFFFD60A), strength = 1.6f)
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }

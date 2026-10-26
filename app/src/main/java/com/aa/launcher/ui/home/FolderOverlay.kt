@@ -145,7 +145,7 @@ private fun FolderContent(vm: LauncherViewModel, folder: OpenFolder) {
             },
             onRemove = { item ->
                 val app = (item as? AppItem)?.app
-                if (app != null && real != null) vm.removeAppFromFolder(real.id, app)
+                if (app != null && real != null) vm.actionSheet = folderAppRemoveSheet(context, vm, real.id, app)
             },
             onDown = { vm.lastItemDownUptime = it },
         )

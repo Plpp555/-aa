@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -103,6 +104,7 @@ private fun CustomizeContent(vm: LauncherViewModel) {
         Modifier
             .navigationBarsPadding()
             .padding(10.dp)
+            .widthIn(max = MaxPanelWidth)
             .fillMaxWidth()
             .liquidGlass(RoundedCornerShape(36.dp), strength = 1.5f)
             .clickable(interactionSource = MutableInteractionSource(), indication = null) { }
@@ -231,7 +233,7 @@ fun EditPagesOverlay(vm: LauncherViewModel) {
                 .navigationBarsPadding(),
         ) {
             if (layout != null) {
-                Column(Modifier.fillMaxSize().padding(16.dp)) {
+                Column(Modifier.align(Alignment.TopCenter).widthIn(max = 720.dp).fillMaxSize().padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.edit_pages),

@@ -21,8 +21,21 @@ echo "YouTube=$A YTMusic=$B"
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
   drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))"
-  shot 14_folder_open 2
+  # フォルダを作っても開かないこと (開いていればフォルダ内の YouTube のラベルが見える)
+  shot 14_folder_created 2
   dump_texts folder
+  if grep -q 'text="YouTube"' "$OUT/ui.xml"; then echo "FOLDER_AUTO_OPEN: opened"; else echo "FOLDER_AUTO_OPEN: stayed closed"; fi
+  # 編集モードのままフォルダを開き、App の「−」で削除シート (App を削除 / ホーム画面から取り除く) が出ること
+  F=$(find_text "Entertainment")
+  if [ -n "$F" ]; then set -- $F; adb shell input tap "$1" "$(($2 - 90))"; fi
+  shot 14b_folder_edit 2
+  M=$(find_text_near "Remove" "YouTube")
+  echo "folder minus -> ${M:-not found}"
+  [ -n "$M" ] && adb shell input tap $M
+  shot 14c_folder_remove_sheet 2
+  dump_texts folder_remove_sheet
+  tap_text "Cancel"
+  sleep 1
   adb shell input keyevent KEYCODE_BACK
   shot 15_home_folder 2
   dump_texts home_after_folder

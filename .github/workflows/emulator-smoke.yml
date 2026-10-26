@@ -14,11 +14,18 @@ jobs:
         include:
           - scenario: smoke.sh
             api: 34
+            profile: pixel_6
           - scenario: smoke2.sh
             api: 34
+            profile: pixel_6
           # Android 6.0 (minSdk) での動作確認
           - scenario: smoke_legacy.sh
             api: 23
+            profile: pixel_6
+          # 大画面 (2 ページ表示) の確認
+          - scenario: smoke_wide.sh
+            api: 34
+            profile: pixel_tablet
     steps:
       - uses: actions/checkout@v5
 
@@ -51,7 +58,7 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
-          profile: pixel_6
+          profile: ${{ matrix.profile }}
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bash .github/scripts/${{ matrix.scenario }}

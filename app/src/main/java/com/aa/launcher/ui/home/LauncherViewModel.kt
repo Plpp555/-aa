@@ -487,8 +487,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        // ホーム画面のページ
-        val pageId = d.currentPageId
+        // ホーム画面のページ (2 ページ表示のときは、指に近いほうのページ)
+        val pageId = listOfNotNull(d.currentPageId, d.secondPageId)
+            .mapNotNull { id -> d.pages[id]?.let { g -> id to abs(pos.x - (g.origin.x + g.cellWidth * g.columns / 2f)) } }
+            .minByOrNull { it.second }?.first ?: d.currentPageId
         val geo = pageId?.let { d.pages[it] }
         if (pageId == null || geo == null) {
             setMergeCandidate(null)
@@ -596,14 +598,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 else -> l
             }
         }
-        if (merge != null) {
-            // 新しくできたフォルダは iOS と同じく開いた状態にする
-            val appId = (p.item as? AppItem)?.app
-            val lay = layout.value
-            val folder = lay?.let { LayoutOps.findItem(it, merge) as? FolderItem }
-                ?: lay?.let { (it.pages.flatMap { page -> page.items } + it.dock).filterIsInstance<FolderItem>().firstOrNull { f -> appId in f.apps } }
-            if (folder != null && openFolder == null) openFolder = OpenFolder(folder.id, folder.name, folder.apps, null)
-        }
+        // フォルダを作った・フォルダに入れたときは開かない (並べ替えを続けられるように)
         d.reset()
     }
 

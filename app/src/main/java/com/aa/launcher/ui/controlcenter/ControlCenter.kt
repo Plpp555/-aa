@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -120,6 +121,8 @@ fun ControlCenterOverlay(vm: LauncherViewModel, visible: Boolean) {
                         },
                     )
                 },
+            // 大画面では右上のパネルにする (スマホの幅では全面)
+            contentAlignment = Alignment.TopEnd,
         ) {
             ControlCenterContent(vm)
         }
@@ -136,7 +139,9 @@ private fun ControlCenterContent(vm: LauncherViewModel) {
 
     BoxWithConstraints(
         Modifier
-            .fillMaxSize()
+            .fillMaxHeight()
+            .widthIn(max = 440.dp)
+            .fillMaxWidth()
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 20.dp, vertical = 16.dp),

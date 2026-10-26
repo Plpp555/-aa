@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -226,10 +229,13 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
     val lastHome = pages.indexOfLast { it is PageModel.Home && !it.isExtra }.coerceAtLeast(firstHome)
     val pagerState = rememberPagerState(initialPage = firstHome) { pagesState.value.size }
     val scope = rememberCoroutineScope()
+    // 折りたたみを開いた画面・タブレットでは 2 ページを並べて表示する
+    val twoPane = isTwoPane()
 
-    // 現在のページ (ドラッグの当たり判定用)
+    // 表示中のページ (ドラッグの当たり判定用)
     SideEffect {
         vm.drag.currentPageId = (pages.getOrNull(pagerState.currentPage) as? PageModel.Home)?.page?.id
+        vm.drag.secondPageId = if (twoPane) (pages.getOrNull(pagerState.currentPage + 1) as? PageModel.Home)?.page?.id else null
     }
 
     LaunchedEffect(vm) {
@@ -255,7 +261,9 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         while (true) {
             val list = pagesState.value
             val next = pagerState.currentPage + edge
-            val ok = next in list.indices && list[next] is PageModel.Home
+            // 2 ページ表示で右へ送るときは、新しく見えるページ (右隣の次) がホームかどうかで判断する
+            val revealed = if (twoPane && edge > 0) pagerState.currentPage + 2 else next
+            val ok = revealed in list.indices && list[revealed] is PageModel.Home
             if (ok) pagerState.animateScrollToPage(next)
             delay(900)
         }
@@ -300,7 +308,9 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-        val gridWidth = maxWidth - 24.dp
+        // 1 ページの幅 (2 ページ表示なら半分)。グリッドとドックはこの幅で計算するので、大画面でも横に引き伸ばされない
+        val pageWidth = if (twoPane) maxWidth / 2 else maxWidth
+        val gridWidth = pageWidth - 24.dp
         val cellW = gridWidth / settings.gridColumns
         val dockIconSize = computeIconSize(cellW, cellW * 1.25f, settings.effectiveIconScale, false)
             .let { if (it > 72.dp) 72.dp else it }
@@ -308,7 +318,8 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         val indicatorH = 40.dp
         val bottomReserved = navBottom + 8.dp + dockH + indicatorH
 
-        val onHome = pages.getOrNull(pagerState.currentPage) is PageModel.Home
+        val onHome = pages.getOrNull(pagerState.currentPage) is PageModel.Home ||
+            (twoPane && pages.getOrNull(pagerState.currentPage + 1) is PageModel.Home)
         // 縦スワイプは修飾子を付けたまま、押した時点の状態で有効/無効を判断する (HomeGrid.homeVerticalSwipe 参照)
         val verticalSwipeEnabled = rememberUpdatedState(onHome && !vm.drag.active && !vm.hasOverlay)
         HorizontalPager(
@@ -322,24 +333,34 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
                     screenHeight = { with(density) { maxHeight.toPx() } },
                     onGesture = { vm.performGesture(it, context) },
                 ),
+            pageSize = if (twoPane) HalfPageSize else PageSize.Fill,
             beyondViewportPageCount = 1,
             userScrollEnabled = !vm.drag.active,
             key = { index -> pagesState.value.getOrNull(index)?.key ?: index },
         ) { index ->
             val page = pages.getOrNull(index) ?: return@HorizontalPager
             // 見えているページ (スクロール中は隣のページも) だけ定期処理を動かす
-            val active by remember(index) {
-                derivedStateOf { abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - index) < 1f }
+            val active by remember(index, twoPane) {
+                derivedStateOf {
+                    val d = index - (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                    d > -1f && d < if (twoPane) 2f else 1f
+                }
             }
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pageEffect(pagerState, index, settings.pageEffect),
+                    // 2 ページ表示ではページ全体の回転・拡大効果は合わないのでスライドのみ
+                    .pageEffect(pagerState, index, if (twoPane) PageEffect.SLIDE else settings.pageEffect),
             ) {
                 CompositionLocalProvider(LocalContentActive provides active) {
                 when (page) {
-                    PageModel.Today -> TodayPage(vm, Modifier.fillMaxSize())
-                    PageModel.Library -> AppLibraryPage(vm, Modifier.fillMaxSize())
+                    // 大画面でも引き伸ばさない (スマホの幅では効かない)
+                    PageModel.Today -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        TodayPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
+                    }
+                    PageModel.Library -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        AppLibraryPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
+                    }
                     is PageModel.Home -> Box(
                         Modifier
                             .fillMaxSize()
@@ -375,12 +396,15 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+                // 2 ページ表示ではドックを 1 ページ分の幅で中央に置く
+                .width(pageWidth)
                 .padding(bottom = navBottom + 8.dp)
                 .graphicsLayer {
                     val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    // 2 ページ表示では、今日の表示が左に出ていても右にホームが見えている間は表示したまま
+                    val leftmost = if (twoPane) firstHome - 1 else firstHome
                     val a = when {
-                        pos < firstHome -> 1f - (firstHome - pos)
+                        pos < leftmost -> 1f - (leftmost - pos)
                         pos > lastHome && !vm.drag.active -> 1f - (pos - lastHome)
                         else -> 1f
                     }.coerceIn(0f, 1f)
@@ -421,6 +445,11 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
             )
         }
     }
+}
+
+/** 2 ページ表示用: 各ページをページャーの幅の半分にする。 */
+private object HalfPageSize : PageSize {
+    override fun Density.calculateMainAxisPageSize(availableSpace: Int, pageSpacing: Int): Int = (availableSpace - pageSpacing) / 2
 }
 
 /** ページめくり効果 (スライド / 奥行き / キューブ / フェード)。 */
@@ -532,6 +561,19 @@ private fun removeSheet(context: android.content.Context, vm: LauncherViewModel,
         title = context.getString(R.string.remove_widget_title),
         message = context.getString(R.string.remove_widget_message),
         actions = listOf(SheetAction(context.getString(R.string.remove), destructive = true) { vm.removeItem(item.id) }),
+    )
+}
+
+/** フォルダ内の App の「−」: ホーム画面と同じく「App を削除 / ホーム画面から取り除く」を選ぶ (取り除いた App は App ライブラリに残る)。 */
+fun folderAppRemoveSheet(context: android.content.Context, vm: LauncherViewModel, folderId: String, appId: String): ActionSheetState {
+    val label = vm.appsById.value[appId]?.label.orEmpty()
+    return ActionSheetState(
+        title = context.getString(R.string.remove_app_title, label),
+        message = context.getString(R.string.remove_app_message),
+        actions = listOf(
+            SheetAction(context.getString(R.string.delete_app), destructive = true) { vm.uninstall(appId) },
+            SheetAction(context.getString(R.string.remove_from_home)) { vm.removeAppFromFolder(folderId, appId) },
+        ),
     )
 }
 

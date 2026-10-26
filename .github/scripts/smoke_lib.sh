@@ -10,7 +10,7 @@ adb() { timeout 60 "$ADB_BIN" "$@"; }
 shot() {
   sleep "${2:-2}"
   adb exec-out screencap -p > "$OUT/$1.png"
-  convert "$OUT/$1.png" -resize 300x -quality 50 "$OUT/$1.jpg"
+  convert "$OUT/$1.png" -resize "${SHOT_WIDTH:-300}x" -quality 50 "$OUT/$1.jpg"
   echo "SHOT_BEGIN $1"
   base64 -w 0 "$OUT/$1.jpg"
   echo
@@ -43,6 +43,30 @@ find_text_retry() {
     sleep 2
   done
   echo "$xy"
+}
+
+# TARGET (テキストか content-desc) のうち、ANCHOR に一番近いものの中心座標 (例: フォルダ内の YouTube の「−」)
+find_text_near() {
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
+  python3 - "$1" "$2" "$OUT/ui.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+target, anchor, path = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    root = ET.parse(path).getroot()
+except Exception:
+    sys.exit(0)
+def center(n):
+    x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+    return (x1 + x2) // 2, (y1 + y2) // 2
+nodes = list(root.iter("node"))
+anchors = [center(n) for n in nodes if anchor in (n.get("text"), n.get("content-desc"))]
+targets = [center(n) for n in nodes if target in (n.get("text"), n.get("content-desc"))]
+if anchors and targets:
+    ax, ay = anchors[0]
+    x, y = min(targets, key=lambda p: (p[0] - ax) ** 2 + (p[1] - ay) ** 2)
+    print(x, y)
+PY
 }
 
 tap_text() {

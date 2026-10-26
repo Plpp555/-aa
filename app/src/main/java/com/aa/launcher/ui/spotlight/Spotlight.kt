@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -245,6 +246,9 @@ private fun SpotlightContent(vm: LauncherViewModel) {
     ) {
         Column(
             Modifier
+                // 大画面では検索結果を引き伸ばさない
+                .align(Alignment.TopCenter)
+                .widthIn(max = 640.dp)
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()

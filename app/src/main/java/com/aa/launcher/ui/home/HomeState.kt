@@ -115,6 +115,8 @@ class DragState {
     var folderBounds: Rect = Rect.Zero
     var folderGeometry: FolderGeometry? = null
     var currentPageId: String? = null
+    /** 2 ページ表示のときの右側のページ (ホームのページでなければ null)。 */
+    var secondPageId: String? = null
     var screenWidth: Float = 0f
     var edgeWidth: Float = 60f
 

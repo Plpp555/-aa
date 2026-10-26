@@ -385,11 +385,13 @@ private fun BatteryRing(battery: BatteryInfo, color: Color, modifier: Modifier) 
     val track = onGlass().copy(alpha = 0.15f)
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = size.minDimension * 0.1f
-            val inset = stroke / 2
-            val arcSize = androidx.compose.ui.geometry.Size(size.minDimension - stroke, size.minDimension - stroke)
-            drawArc(track, 0f, 360f, false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(stroke))
-            drawArc(color, -90f, 360f * battery.level / 100f, false, topLeft = Offset(inset, inset), size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            // ウィジェットの枠は端末によって正方形でないので、リングを枠の中央に描く (中のマークと % は中央揃え)
+            val d = size.minDimension
+            val stroke = d * 0.1f
+            val arcSize = androidx.compose.ui.geometry.Size(d - stroke, d - stroke)
+            val topLeft = Offset((size.width - d) / 2f + stroke / 2, (size.height - d) / 2f + stroke / 2)
+            drawArc(track, 0f, 360f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke))
+            drawArc(color, -90f, 360f * battery.level / 100f, false, topLeft = topLeft, size = arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(if (battery.charging) Icons.Rounded.Bolt else Icons.Rounded.PhoneAndroid, null, tint = onGlass(), modifier = Modifier.size(22.dp))
