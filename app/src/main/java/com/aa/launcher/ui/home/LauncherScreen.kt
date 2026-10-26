@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +112,7 @@ import com.aa.launcher.ui.today.WidgetPickerSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Composable
@@ -395,18 +397,26 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                // 2 ページ表示ではドックを 1 ページ分の幅で中央に置く
+                // 2 ページ表示ではドックを 1 ページ分の幅にして、見えているホームのページの下に付いていく
+                // (今日の表示や App ライブラリに重ならない)。配置段階で動かすので、ドロップ先の位置もそれに合う
                 .width(pageWidth)
+                .offset {
+                    if (!twoPane) return@offset IntOffset.Zero
+                    val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    IntOffset(dockPlacement(pages, pos, pageWidth.toPx()).second.roundToInt(), 0)
+                }
                 .padding(bottom = navBottom + 8.dp)
                 .graphicsLayer {
                     val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    // 2 ページ表示では、今日の表示が左に出ていても右にホームが見えている間は表示したまま
-                    val leftmost = if (twoPane) firstHome - 1 else firstHome
-                    val a = when {
-                        pos < leftmost -> 1f - (leftmost - pos)
-                        pos > lastHome && !vm.drag.active -> 1f - (pos - lastHome)
-                        else -> 1f
-                    }.coerceIn(0f, 1f)
+                    val a = if (twoPane) {
+                        dockPlacement(pages, pos, size.width).first
+                    } else {
+                        when {
+                            pos < firstHome -> 1f - (firstHome - pos)
+                            pos > lastHome && !vm.drag.active -> 1f - (pos - lastHome)
+                            else -> 1f
+                        }.coerceIn(0f, 1f)
+                    }
                     alpha = a
                     translationY = (1f - a) * 120.dp.toPx()
                 },
@@ -444,6 +454,29 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
             )
         }
     }
+}
+
+/**
+ * 2 ページ表示のドック: (不透明度, 横方向のずれ)。見えているホームのページの下に置く。
+ * ホームが左右に並ぶときは中央 (ずれ 0)、片側だけならその下 (±半ページ)。ホームが見えている幅に応じてフェードする。
+ * [pageWidth] は 1 ページ (= ドック) の幅、画面の幅はその 2 倍。
+ */
+private fun dockPlacement(pages: List<PageModel>, pos: Float, pageWidth: Float): Pair<Float, Float> {
+    var visible = 0f
+    var weighted = 0f
+    val first = floor(pos).toInt()
+    for (i in first..first + 2) {
+        if (pages.getOrNull(i) !is PageModel.Home) continue
+        val left = ((i - pos) * pageWidth).coerceIn(0f, 2 * pageWidth)
+        val right = ((i - pos + 1) * pageWidth).coerceIn(0f, 2 * pageWidth)
+        val w = right - left
+        if (w <= 0f) continue
+        visible += w
+        weighted += w * (left + right) / 2f
+    }
+    val alpha = (visible / pageWidth).coerceIn(0f, 1f)
+    val shift = if (visible > 0f) (weighted / visible - pageWidth).coerceIn(-pageWidth / 2f, pageWidth / 2f) else 0f
+    return alpha to shift
 }
 
 /** 2 ページ表示用: 各ページをページャーの幅の半分にする。 */

@@ -36,6 +36,10 @@ sleep 2
 adb shell input swipe $((W * 12 / 100)) $((H * 45 / 100)) $((W * 70 / 100)) $((H * 45 / 100)) 300
 shot W02_today 3
 dump_texts today
+# 同じ右スワイプをもう一度 (最初の 1 回だけ届かない現象と、2 ページ表示の不具合を切り分ける)
+adb shell input swipe $((W * 12 / 100)) $((H * 45 / 100)) $((W * 70 / 100)) $((H * 45 / 100)) 300
+shot W02b_today_again 3
+dump_texts today_again
 
 adb shell input keyevent KEYCODE_HOME
 sleep 2
