@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -65,6 +66,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,6 +89,8 @@ import com.aa.launcher.ui.home.MenuTarget
 import com.aa.launcher.ui.home.launcherItemGestures
 import com.aa.launcher.ui.theme.LabelShadow
 import com.aa.launcher.ui.theme.LocalLauncherSettings
+import kotlin.math.ceil
+import kotlin.math.max
 import kotlinx.coroutines.launch
 
 private data class LibraryGroup(val title: String, val apps: List<AppEntry>, val locked: Boolean = false, val bigOnly: Boolean = false)
@@ -104,8 +108,9 @@ fun AppLibraryPage(vm: LauncherViewModel, modifier: Modifier = Modifier) {
             focusManager.clearFocus()
         }
     }
-    Column(modifier.padding(top = statusTop + 10.dp)) {
-        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.padding(top = statusTop + 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        // タブレットでは検索欄を引き伸ばさない (スマホの幅では効かない)
+        Row(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
                 GlassSearchField(
                     value = query,
@@ -132,7 +137,11 @@ fun AppLibraryPage(vm: LauncherViewModel, modifier: Modifier = Modifier) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        if (vm.libraryListMode) LibraryList(vm, query, Modifier.weight(1f)) else LibraryGrid(vm, Modifier.weight(1f))
+        if (vm.libraryListMode) {
+            LibraryList(vm, query, Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth())
+        } else {
+            LibraryGrid(vm, Modifier.weight(1f).fillMaxWidth())
+        }
     }
 }
 
@@ -171,7 +180,7 @@ private fun LibraryGrid(vm: LauncherViewModel, modifier: Modifier) {
     val context = LocalContext.current
     val activity = context as Activity
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = LibraryColumns,
         modifier = modifier,
         contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = navBottom + 24.dp),
         horizontalArrangement = Arrangement.spacedBy(22.dp),
@@ -188,6 +197,21 @@ private fun LibraryGrid(vm: LauncherViewModel, modifier: Modifier) {
             )
         }
         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+/**
+ * App ライブラリの列数。スマホは 2 列 (従来どおり)、タブレットなど幅が広いときは iPadOS と同じく
+ * フォルダをスマホ程度の大きさ (約 190dp 以下) に保ったまま列を増やす。
+ */
+private object LibraryColumns : GridCells {
+    override fun Density.calculateCrossAxisCellSizes(availableSize: Int, spacing: Int): List<Int> {
+        val maxFolder = 190.dp.roundToPx()
+        val count = max(2, ceil((availableSize + spacing) / (maxFolder + spacing).toFloat()).toInt())
+        val gridSize = availableSize - spacing * (count - 1)
+        val slot = gridSize / count
+        val remaining = gridSize % count
+        return List(count) { slot + if (it < remaining) 1 else 0 }
     }
 }
 

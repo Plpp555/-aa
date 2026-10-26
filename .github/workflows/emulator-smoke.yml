@@ -22,10 +22,13 @@ jobs:
           - scenario: smoke_legacy.sh
             api: 23
             profile: pixel_6
-          # 大画面 (2 ページ表示) の確認
+          # 大画面: タブレットは 1 ページ、折りたたみを開いた画面は 2 ページ表示
           - scenario: smoke_wide.sh
             api: 34
             profile: pixel_tablet
+          - scenario: smoke_wide.sh
+            api: 34
+            profile: pixel_fold
     steps:
       - uses: actions/checkout@v5
 

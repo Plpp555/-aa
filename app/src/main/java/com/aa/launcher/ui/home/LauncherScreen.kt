@@ -354,13 +354,12 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
             ) {
                 CompositionLocalProvider(LocalContentActive provides active) {
                 when (page) {
-                    // 大画面でも引き伸ばさない (スマホの幅では効かない)
+                    // 今日の表示は大画面でも引き伸ばさない (スマホの幅では効かない)
                     PageModel.Today -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                         TodayPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
                     }
-                    PageModel.Library -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                        AppLibraryPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
-                    }
+                    // App ライブラリは幅に応じて列を増やす (LibraryColumns)
+                    PageModel.Library -> AppLibraryPage(vm, Modifier.fillMaxSize())
                     is PageModel.Home -> Box(
                         Modifier
                             .fillMaxSize()

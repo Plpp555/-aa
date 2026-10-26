@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# 大画面 (Pixel Tablet, 横向き 1280x800dp) での確認: ホームを 2 ページ並べて表示し、
-# 今日の表示・App ライブラリ・ドック・コントロールセンター・Spotlight・シートが横に引き伸ばされないこと、
-# 2 ページ表示でもドラッグでフォルダを作れることを確かめる。
+# 大画面での確認。同じスクリプトを 2 つの端末で動かす:
+# - Pixel Tablet (横長): iPadOS と同じく 1 ページ表示。今日の表示は最大幅、App ライブラリは列が増えてフォルダはスマホ程度の大きさ
+# - Pixel Fold (開いた画面、ほぼ正方形): ホームを 2 ページ並べて表示し、2 ページ表示でもドラッグでフォルダを作れる
+# 座標は画面サイズの割合と画面密度から決める。
 set -u
 source "$(dirname "$0")/smoke_lib.sh"
 SHOT_WIDTH=640
 
 setup_app
-adb shell wm density
+DENS=$(adb shell wm density | tr -d '\r' | grep -o '[0-9]*' | tail -1)
+DENS=${DENS:-320}
+# ラベルの中心からアイコンの中心まで (約 34dp)
+OFF=$((DENS * 34 / 160))
 # 画面サイズ (向きによって変わるので座標は割合で決める)
 SIZE=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -1)
 set -- ${SIZE:-2560 1600}
@@ -16,7 +20,7 @@ W=$1; H=$2
 adb exec-out screencap -p > "$OUT/orient.png"
 read -r SW SH < <(identify -format '%w %h' "$OUT/orient.png")
 W=${SW:-$W}; H=${SH:-$H}
-echo "screen ${W}x${H}"
+echo "screen ${W}x${H} density ${DENS}"
 tap_text "Get Started"
 shot W01_home 4
 dump_texts home
@@ -54,7 +58,7 @@ A=$(find_text "YouTube"); B=$(find_text "YT Music")
 echo "YouTube=$A YTMusic=$B"
 if [ -n "$A" ] && [ -n "$B" ]; then
   set -- $A $B
-  drag_to "$1" "$(($2 - 70))" "$3" "$(($4 - 70))"
+  drag_to "$1" "$(($2 - OFF))" "$3" "$(($4 - OFF))"
   shot W06_folder_created 2
   dump_texts folder
   tap_text "Done"
