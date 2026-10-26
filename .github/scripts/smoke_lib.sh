@@ -131,6 +131,30 @@ hold_then_drag() {
   adb shell input motionevent UP "$x" "$y"
 }
 
+# 写真壁紙の編集画面: 横長のテスト画像 (LEFT / CENTER / RIGHT) を選んだ写真として置いて編集画面を開き、
+# 右へドラッグして (写真の左側が見えるように) 位置を変え、「Set」で反映してホーム画面を撮る。
+# 編集画面は debug ビルドだけ外部から起動できる (app/src/debug/AndroidManifest.xml)。
+crop_photo_test() {
+  local name=$1 sw sh
+  convert -size 3000x2000 gradient:'#ff5f6d'-'#2193b0' -fill white -pointsize 240 \
+    -gravity west -annotate +120+0 'LEFT' -gravity east -annotate +120+0 'RIGHT' -gravity center -annotate +0+0 'CENTER' \
+    "$OUT/photo.jpg"
+  adb push "$OUT/photo.jpg" /data/local/tmp/photo.jpg > /dev/null
+  adb shell chmod 644 /data/local/tmp/photo.jpg
+  adb shell "run-as $PKG sh -c 'mkdir -p files && cat /data/local/tmp/photo.jpg > files/wallpaper_pending.jpg'"
+  adb shell am start -W -n "$PKG/com.aa.launcher.settings.WallpaperCropActivity" --ez pending true
+  shot "${name}_editor" 3
+  dump_texts "${name}_editor"
+  adb exec-out screencap -p > "$OUT/crop_size.png"
+  read -r sw sh < <(identify -format '%w %h' "$OUT/crop_size.png")
+  adb shell input swipe $((sw / 3)) $((sh / 2)) $((sw * 2 / 3)) $((sh / 2)) 600
+  shot "${name}_editor_moved" 2
+  tap_text "Set"
+  sleep 2
+  adb shell input keyevent KEYCODE_HOME
+  shot "${name}_home" 4
+}
+
 # 初回起動の準備: インストール、ホームアプリ設定、通知アクセス、初回案内を閉じる
 setup_app() {
   adb install -r -g app/build/outputs/apk/debug/app-debug.apk

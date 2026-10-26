@@ -38,6 +38,13 @@ enum class IconShape(@StringRes val label: Int) {
     SYSTEM(R.string.shape_system),
 }
 
+/**
+ * 写真壁紙のどこを使うか。[cx]・[cy] は元の写真に対する中心の位置 (0〜1)、[zoom] は画面を覆う最小の大きさに対する拡大率 (1 以上)。
+ * 中心と拡大率で持つので、折りたたみの開閉や画面の向きで縦横比が変わっても同じ部分が使われる。
+ */
+@Serializable
+data class WallpaperCrop(val cx: Float = 0.5f, val cy: Float = 0.5f, val zoom: Float = 1f)
+
 @Serializable
 enum class WallpaperSource(@StringRes val label: Int) {
     BUILTIN(R.string.wallpaper_source_builtin),
@@ -177,6 +184,7 @@ data class LauncherSettings(
     val builtinWallpaper: Int = 0,
     val dimWallpaperInDark: Boolean = true,
     val blurHomeWallpaper: Boolean = false,
+    val wallpaperCrop: WallpaperCrop = WallpaperCrop(),
 
     // ホーム画面
     val gridColumns: Int = 4,

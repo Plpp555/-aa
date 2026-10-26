@@ -87,4 +87,16 @@ tap_text "Clear"
 adb shell input keyevent KEYCODE_HOME
 shot W08_home_clear 4
 
+# 写真壁紙の位置調整
+crop_photo_test W09_photo
+if [ "${FOLD_SIM:-0}" = 1 ]; then
+  # 折りたたむ (元の画面サイズ) → 開く: 壁紙がその画面に合わせて作り直され、ガラスの透かしがずれないこと
+  adb shell wm size reset
+  adb shell wm density reset
+  shot W10_folded 5
+  adb shell wm size 2208x1840
+  adb shell wm density 420
+  shot W11_unfolded 5
+fi
+
 print_logs

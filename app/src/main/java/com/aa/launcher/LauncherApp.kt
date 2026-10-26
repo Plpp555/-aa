@@ -67,8 +67,8 @@ class LauncherApp : Application() {
 
         // 壁紙
         appScope.launch {
-            settings.map { it.wallpaperSource to it.builtinWallpaper }.distinctUntilChanged().collect { (source, index) ->
-                wallpaperRepository.refresh(source, index)
+            settings.map { Triple(it.wallpaperSource, it.builtinWallpaper, it.wallpaperCrop) }.distinctUntilChanged().collect { (source, index, crop) ->
+                wallpaperRepository.refresh(source, index, crop)
             }
         }
 

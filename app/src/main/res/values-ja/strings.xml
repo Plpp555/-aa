@@ -240,6 +240,10 @@
     <string name="default_home">デフォルトのホームアプリ</string>
     <string name="wallpaper_builtin_header">壁紙</string>
     <string name="wallpaper_choose_photo">写真を選ぶ…</string>
+    <string name="wallpaper_crop_title">移動と拡大・縮小</string>
+    <string name="wallpaper_crop_hint">ピンチで拡大・縮小、ドラッグで移動</string>
+    <string name="wallpaper_crop_set">設定</string>
+    <string name="wallpaper_adjust_photo">写真の位置を調整</string>
     <string name="wallpaper_use_system">システムの壁紙を使用</string>
     <string name="wallpaper_open_system_picker">システムの壁紙設定を開く</string>
     <string name="wallpaper_system_footer">システムの壁紙を使う場合、Android 13 以降では Liquid Glass の背景ぼかしが使えないことがあります。</string>

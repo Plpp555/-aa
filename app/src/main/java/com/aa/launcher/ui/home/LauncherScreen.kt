@@ -147,6 +147,8 @@ fun LauncherScreen(vm: LauncherViewModel) {
                     .fillMaxSize()
                     .onSizeChanged {
                         screen = it
+                        // 折りたたみの開閉・回転で大きさが変わったら、壁紙をその画面に合わせて作り直す
+                        vm.app.wallpaperRepository.setViewSize(it.width, it.height)
                         vm.drag.screenWidth = it.width.toFloat()
                         vm.drag.edgeWidth = 28f * context.resources.displayMetrics.density
                     }

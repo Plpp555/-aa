@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.aa.launcher.core.Backdrop
+import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -241,30 +243,46 @@ private class LiquidGlassNode(
         }
     }
 
+    /**
+     * 背景画像を画面に置く位置と大きさ (この要素の座標)。壁紙 (ContentScale.Crop) と同じく縦横比を保って画面を覆い、中央に合わせる。
+     * 画面の縦横比が壁紙を作ったときと違っても (折りたたみの開閉直後など)、透かしが背後の壁紙とずれない。
+     */
+    private fun coverPlacement(image: ImageBitmap): Pair<IntOffset, IntSize> {
+        val sw = screen.width.toFloat()
+        val sh = screen.height.toFloat()
+        val scale = max(sw / image.width, sh / image.height)
+        val w = image.width * scale
+        val h = image.height * scale
+        val left = (sw - w) / 2f - origin.x
+        val top = (sh - h) / 2f - origin.y
+        return IntOffset(left.roundToInt(), top.roundToInt()) to IntSize(w.roundToInt(), h.roundToInt())
+    }
+
     override fun ContentDrawScope.draw() {
         ensureCache()
         val bd = backdrop
         val reduce = params.reduceTransparency
         clipPath(path) {
             if (bd != null && !reduce) {
-                val dst = IntOffset(-origin.x.roundToInt(), -origin.y.roundToInt())
                 if (heavyMix < 0.999f) {
+                    val (dst, dstSize) = coverPlacement(bd.light)
                     drawImage(
                         image = bd.light,
                         srcOffset = IntOffset.Zero,
                         srcSize = IntSize(bd.light.width, bd.light.height),
                         dstOffset = dst,
-                        dstSize = screen,
+                        dstSize = dstSize,
                         filterQuality = FilterQuality.Medium,
                     )
                 }
                 if (heavyMix > 0.001f) {
+                    val (dst, dstSize) = coverPlacement(bd.heavy)
                     drawImage(
                         image = bd.heavy,
                         srcOffset = IntOffset.Zero,
                         srcSize = IntSize(bd.heavy.width, bd.heavy.height),
                         dstOffset = dst,
-                        dstSize = screen,
+                        dstSize = dstSize,
                         alpha = heavyMix,
                         filterQuality = FilterQuality.Medium,
                     )

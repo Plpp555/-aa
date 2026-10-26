@@ -32,7 +32,10 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import com.aa.launcher.R
+import com.aa.launcher.settings.WallpaperCrop
 import com.aa.launcher.settings.WallpaperSource
+import kotlin.math.abs
+import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -193,15 +196,23 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
     private val _state = MutableStateFlow(WallpaperState())
     val state: StateFlow<WallpaperState> = _state.asStateFlow()
 
-    private val customFile get() = File(context.filesDir, "wallpaper_custom.jpg")
+    /** 写真壁紙の元画像 (切り抜かずに保存し、表示する画面に合わせて [WallpaperCropMath] で切り抜く)。 */
+    private val sourceFile get() = File(context.filesDir, "wallpaper_source.jpg")
+    /** 選んだばかりで、編集画面で「設定」を押す前の写真。キャンセルすれば前の写真のまま。 */
+    private val pendingFile get() = File(context.filesDir, "wallpaper_pending.jpg")
+    /** 以前の形式 (取り込み時に画面サイズで切り抜いたもの)。元画像がなければこれを元画像として使う。 */
+    private val legacyFile get() = File(context.filesDir, "wallpaper_custom.jpg")
     private var lastKey: String? = null
     private var job: Job? = null
     private var currentSource = WallpaperSource.BUILTIN
     private var currentBuiltin = 0
+    private var currentCrop = WallpaperCrop()
+    /** 壁紙を作る大きさ。ホーム画面の実際の大きさ (setViewSize) が分かるまでは [screenSize]。 */
+    private var buildSize: Pair<Int, Int>? = null
 
     init {
         // システム壁紙の変更を検知する。リスナーは Android 8.1 以降、それより前は壁紙変更のブロードキャスト
-        val onChanged = { if (currentSource == WallpaperSource.SYSTEM) refresh(currentSource, currentBuiltin, force = true) }
+        val onChanged = { if (currentSource == WallpaperSource.SYSTEM) refresh(currentSource, currentBuiltin, currentCrop, force = true) }
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 WallpaperManager.getInstance(context).addOnColorsChangedListener({ _, _ -> onChanged() }, Handler(Looper.getMainLooper()))
@@ -217,18 +228,40 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         }
     }
 
-    fun refresh(source: WallpaperSource, builtin: Int, force: Boolean = false) {
+    fun refresh(source: WallpaperSource, builtin: Int, crop: WallpaperCrop = currentCrop, force: Boolean = false) {
         currentSource = source
         currentBuiltin = builtin
-        val key = "$source:$builtin:${customFile.lastModified()}"
+        currentCrop = crop
+        val (w, h) = targetSize()
+        val key = "$source:$builtin:${sourcePhoto()?.lastModified()}:$crop:${w}x$h"
         if (!force && key == lastKey) return
         lastKey = key
         job?.cancel()
         job = scope.launch {
-            val st = withContext(Dispatchers.Default) { runCatching { build(source, builtin) }.getOrDefault(WallpaperState()) }
+            val st = withContext(Dispatchers.Default) { runCatching { build(source, builtin, crop, w, h) }.getOrDefault(WallpaperState()) }
             _state.value = st
         }
     }
+
+    /**
+     * ホーム画面の実際の大きさ。折りたたみの開閉や画面の回転で縦横比・大きさが大きく変わったら、その画面に合わせて壁紙を作り直す
+     * (以前は作ったときの大きさのまま拡大され、Liquid Glass の透かし位置もずれていた)。小さな差では作り直さない。
+     */
+    fun setViewSize(w: Int, h: Int) {
+        if (w <= 0 || h <= 0) return
+        val (cw, ch) = targetSize()
+        val aspect = w.toFloat() / h
+        val current = cw.toFloat() / ch
+        val aspectChanged = abs(aspect - current) / current > 0.08f
+        val sizeChanged = abs(w - cw) > cw * 0.25f || abs(h - ch) > ch * 0.25f
+        if (!aspectChanged && !sizeChanged) return
+        buildSize = w to h
+        refresh(currentSource, currentBuiltin, currentCrop)
+    }
+
+    private fun targetSize(): Pair<Int, Int> = buildSize ?: screenSize()
+
+    private fun sourcePhoto(): File? = sourceFile.takeIf { it.exists() } ?: legacyFile.takeIf { it.exists() }
 
     fun screenSize(): Pair<Int, Int> {
         val wm = context.getSystemService(WindowManager::class.java)
@@ -243,13 +276,12 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         return minOf(w, h) to maxOf(w, h)
     }
 
-    private fun build(source: WallpaperSource, builtin: Int): WallpaperState {
-        val (w, h) = screenSize()
+    private fun build(source: WallpaperSource, builtin: Int, crop: WallpaperCrop, w: Int, h: Int): WallpaperState {
         return when (source) {
-            WallpaperSource.BUILTIN -> fromBitmap(BuiltinWallpapers.render(builtin, w / 2, h / 2), showImage = true)
+            WallpaperSource.BUILTIN -> fromBitmap(BuiltinWallpapers.render(builtin, w / 2, h / 2), w, h, showImage = true)
             WallpaperSource.CUSTOM -> {
-                val bmp = decodeFile(customFile, w, h)
-                if (bmp != null) fromBitmap(bmp, showImage = true) else fromBitmap(BuiltinWallpapers.render(builtin, w / 2, h / 2), showImage = true)
+                val bmp = sourcePhoto()?.let { decodeCropped(it, w, h, crop) }
+                if (bmp != null) fromBitmap(bmp, w, h, showImage = true) else fromBitmap(BuiltinWallpapers.render(builtin, w / 2, h / 2), w, h, showImage = true)
             }
             WallpaperSource.SYSTEM -> {
                 val wm = WallpaperManager.getInstance(context)
@@ -263,7 +295,7 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
                     null
                 } ?: 0xFF3A3A3C.toInt()
                 if (bmp != null) {
-                    fromBitmap(bmp, showImage = false)
+                    fromBitmap(bmp, w, h, showImage = false)
                 } else {
                     WallpaperState(image = null, backdrop = null, averageColor = primary, isDark = ColorUtils.calculateLuminance(primary) < 0.5)
                 }
@@ -271,8 +303,7 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         }
     }
 
-    private fun fromBitmap(bmp: Bitmap, showImage: Boolean): WallpaperState {
-        val (w, h) = screenSize()
+    private fun fromBitmap(bmp: Bitmap, w: Int, h: Int, showImage: Boolean): WallpaperState {
         // 弱ぼかし: 画面の 1/2 解像度。クリア寄りでぼかしが弱くても拡大時に粗さが出ない
         val light = BlurUtils.blur(bmp.scale((w / 2).coerceAtLeast(8), (h / 2).coerceAtLeast(8)), 3)
         // 強ぼかし: 1/4 解像度で十分 (従来の 1/6・半径 10 と同等の効き具合で、より滑らか)
@@ -307,39 +338,77 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         return out
     }
 
-    private fun decodeFile(file: File, w: Int, h: Int): Bitmap? {
-        if (!file.exists()) return null
+    /** 元画像から、画面 (w×h) に表示する範囲 ([WallpaperCropMath.rect]) を切り抜いて w×h にする。 */
+    private fun decodeCropped(file: File, w: Int, h: Int, crop: WallpaperCrop): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val rect = WallpaperCropMath.rect(bounds.outWidth, bounds.outHeight, w, h, crop)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= w && bounds.outHeight / (sample * 2) >= h) sample *= 2
+        while (rect.width() / (sample * 2) >= w && rect.height() / (sample * 2) >= h) sample *= 2
         val bmp = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
-        return centerCrop(bmp, w, h)
+        val sx = bmp.width / bounds.outWidth.toFloat()
+        val sy = bmp.height / bounds.outHeight.toFloat()
+        val src = Rect(
+            (rect.left * sx).roundToInt(),
+            (rect.top * sy).roundToInt(),
+            (rect.right * sx).roundToInt().coerceAtMost(bmp.width),
+            (rect.bottom * sy).roundToInt().coerceAtMost(bmp.height),
+        )
+        val out = createBitmap(w, h)
+        Canvas(out).drawBitmap(bmp, src, RectF(0f, 0f, w.toFloat(), h.toFloat()), Paint(Paint.FILTER_BITMAP_FLAG))
+        return out
     }
 
-    /** 写真を壁紙として取り込む。 */
+    /**
+     * 選んだ写真を取り込む (切り抜かずに、長辺 [MAX_PHOTO_SIDE] までに縮小して保存)。
+     * この時点では壁紙は変わらない。編集画面で位置を決めて [commitPendingPhoto] したときに使われる。
+     */
     suspend fun importPhoto(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val (w, h) = screenSize()
-            val decoded = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) decodeWithImageDecoder(uri, w, h) else decodeLegacy(uri, w, h) ?: return@runCatching false
-            val cropped = centerCrop(decoded, w, h)
-            customFile.outputStream().use { cropped.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            val decoded = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) decodeWithImageDecoder(uri) else decodeLegacy(uri) ?: return@runCatching false
+            pendingFile.outputStream().use { decoded.compress(Bitmap.CompressFormat.JPEG, 94, it) }
             true
         }.getOrDefault(false)
     }
 
+    /** 編集画面で「設定」を押したとき: 選んだ写真を壁紙の元画像にする。 */
+    suspend fun commitPendingPhoto(): Boolean = withContext(Dispatchers.IO) {
+        if (!pendingFile.exists()) return@withContext sourcePhoto() != null
+        sourceFile.delete()
+        val ok = pendingFile.renameTo(sourceFile)
+        if (ok) legacyFile.delete()
+        ok
+    }
+
+    /** 編集画面でキャンセルしたとき: 選んだ写真を捨てる (前の壁紙のまま)。 */
+    fun discardPendingPhoto() {
+        pendingFile.delete()
+    }
+
+    /** 編集画面に表示する写真 (選んだばかりの写真か、今の元画像)。長辺 [maxSide] 程度に縮小して読む。 */
+    suspend fun loadPhotoForEditor(pending: Boolean, maxSide: Int): Bitmap? = withContext(Dispatchers.IO) {
+        val file = if (pending) pendingFile.takeIf { it.exists() } else sourcePhoto()
+        file ?: return@withContext null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun decodeWithImageDecoder(uri: Uri, w: Int, h: Int): Bitmap {
+    private fun decodeWithImageDecoder(uri: Uri): Bitmap {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
         return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            val s = max(w.toFloat() / info.size.width, h.toFloat() / info.size.height).coerceAtMost(1f)
+            val s = (MAX_PHOTO_SIDE.toFloat() / max(info.size.width, info.size.height)).coerceAtMost(1f)
             decoder.setTargetSize((info.size.width * s).roundToInt().coerceAtLeast(1), (info.size.height * s).roundToInt().coerceAtLeast(1))
         }
     }
 
     /** Android 8.1 以前: BitmapFactory で縮小して読み、EXIF の向きを反映する (ImageDecoder は自動で反映する)。 */
-    private fun decodeLegacy(uri: Uri, w: Int, h: Int): Bitmap? {
+    private fun decodeLegacy(uri: Uri): Bitmap? {
         val resolver = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
@@ -350,7 +419,7 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         val srcW = if (swap) bounds.outHeight else bounds.outWidth
         val srcH = if (swap) bounds.outWidth else bounds.outHeight
         var sample = 1
-        while (srcW / (sample * 2) >= w && srcH / (sample * 2) >= h) sample *= 2
+        while (max(srcW, srcH) / (sample * 2) >= MAX_PHOTO_SIDE) sample *= 2
         val bmp = resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: return null
@@ -365,11 +434,11 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
     }
 
     /** 現在のランチャー壁紙をシステム壁紙 (ホーム/ロック) にも設定する。 */
-    suspend fun applyToSystem(source: WallpaperSource, builtin: Int, flags: Int): Boolean = withContext(Dispatchers.IO) {
+    suspend fun applyToSystem(source: WallpaperSource, builtin: Int, flags: Int, crop: WallpaperCrop): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val (w, h) = screenSize()
             val bmp = when (source) {
-                WallpaperSource.CUSTOM -> decodeFile(customFile, w, h) ?: BuiltinWallpapers.render(builtin, w, h)
+                WallpaperSource.CUSTOM -> sourcePhoto()?.let { decodeCropped(it, w, h, crop) } ?: BuiltinWallpapers.render(builtin, w, h)
                 else -> BuiltinWallpapers.render(builtin, w, h)
             }
             val manager = WallpaperManager.getInstance(context)
@@ -379,11 +448,31 @@ class WallpaperRepository(private val context: Context, private val scope: Corou
         }.getOrDefault(false)
     }
 
-    fun hasCustomPhoto(): Boolean = customFile.exists()
+    fun hasCustomPhoto(): Boolean = sourcePhoto() != null
 
     fun previewBuiltin(index: Int, w: Int, h: Int): Bitmap = BuiltinWallpapers.render(index, w, h)
 
     companion object {
+        /** 取り込む写真の長辺の上限 (大きな画面で拡大しても粗くならず、メモリも使いすぎない)。 */
+        const val MAX_PHOTO_SIDE = 3200
+
         fun isLight(color: Int) = ColorUtils.calculateLuminance(color) > 0.6 || Color.alpha(color) < 80
+    }
+}
+
+/** 写真壁紙の切り抜き範囲の計算 (壁紙の作成と編集画面で共通)。 */
+object WallpaperCropMath {
+    /**
+     * 画面 (w×h) に表示する、元画像 (iw×ih) の範囲 (元画像の座標)。
+     * 拡大率 1 で画面を覆う最小の範囲 (中央切り抜きと同じ大きさ) になり、中心は写真の外に出ないように寄せる。
+     */
+    fun rect(iw: Int, ih: Int, w: Int, h: Int, crop: WallpaperCrop): RectF {
+        val base = min(iw / w.toFloat(), ih / h.toFloat())
+        val scale = base / crop.zoom.coerceAtLeast(1f)
+        val cw = w * scale
+        val ch = h * scale
+        val cx = (crop.cx * iw).coerceIn(cw / 2f, iw - cw / 2f)
+        val cy = (crop.cy * ih).coerceIn(ch / 2f, ih - ch / 2f)
+        return RectF(cx - cw / 2f, cy - ch / 2f, cx + cw / 2f, cy + ch / 2f)
     }
 }

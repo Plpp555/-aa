@@ -97,6 +97,7 @@ import com.aa.launcher.settings.Route
 import com.aa.launcher.settings.SearchEngine
 import com.aa.launcher.settings.SettingsNav
 import com.aa.launcher.settings.ThemeMode
+import com.aa.launcher.settings.WallpaperCropActivity
 import com.aa.launcher.settings.WallpaperSource
 import com.aa.launcher.ui.common.AppIconImage
 import com.aa.launcher.ui.common.HueBrush
@@ -232,8 +233,8 @@ private fun WallpaperContent(nav: SettingsNav) {
         if (uri != null) {
             scope.launch {
                 if (repo.importPhoto(uri)) {
-                    nav.update { it.copy(wallpaperSource = WallpaperSource.CUSTOM) }
-                    repo.refresh(WallpaperSource.CUSTOM, s.builtinWallpaper, force = true)
+                    // 選んだ写真のどこを壁紙にするかを決める (「設定」で反映、キャンセルなら今の壁紙のまま)
+                    context.startActivity(WallpaperCropActivity.intent(context, pending = true))
                 } else {
                     Toast.makeText(context, R.string.error_generic, Toast.LENGTH_SHORT).show()
                 }
@@ -245,7 +246,7 @@ private fun WallpaperContent(nav: SettingsNav) {
         if (applying) return
         applying = true
         scope.launch {
-            val ok = repo.applyToSystem(s.wallpaperSource, s.builtinWallpaper, flags)
+            val ok = repo.applyToSystem(s.wallpaperSource, s.builtinWallpaper, flags, s.wallpaperCrop)
             applying = false
             Toast.makeText(context, if (ok) R.string.wallpaper_applied else R.string.error_generic, Toast.LENGTH_SHORT).show()
         }
@@ -282,6 +283,11 @@ private fun WallpaperContent(nav: SettingsNav) {
             s.wallpaperSource == WallpaperSource.CUSTOM,
             { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         )
+        if (s.wallpaperSource == WallpaperSource.CUSTOM && repo.hasCustomPhoto()) {
+            ButtonRow(stringResource(R.string.wallpaper_adjust_photo), onClick = {
+                context.startActivity(WallpaperCropActivity.intent(context, pending = false))
+            })
+        }
         CheckRow(
             stringResource(R.string.wallpaper_use_system),
             s.wallpaperSource == WallpaperSource.SYSTEM,

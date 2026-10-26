@@ -109,6 +109,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 写真壁紙の位置と大きさを決める画面 (開閉・回転では作り直さない) -->
+        <activity
+            android:name=".settings.WallpaperCropActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density"
+            android:exported="false"
+            android:theme="@style/Theme.Launcher" />
+
         <service
             android:name=".service.BadgeNotificationListener"
             android:exported="true"

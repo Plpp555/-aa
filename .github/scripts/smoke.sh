@@ -71,4 +71,7 @@ adb shell input keyevent KEYCODE_BACK
 adb shell input keyevent KEYCODE_HOME
 shot 12_home_tinted 4
 
+# 写真壁紙の位置調整
+crop_photo_test 13_photo
+
 print_logs

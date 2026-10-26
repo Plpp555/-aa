@@ -242,6 +242,10 @@
     <string name="default_home">Default Home App</string>
     <string name="wallpaper_builtin_header">Wallpapers</string>
     <string name="wallpaper_choose_photo">Choose a Photo…</string>
+    <string name="wallpaper_crop_title">Move and Scale</string>
+    <string name="wallpaper_crop_hint">Pinch to zoom, drag to move</string>
+    <string name="wallpaper_crop_set">Set</string>
+    <string name="wallpaper_adjust_photo">Adjust Photo Position</string>
     <string name="wallpaper_use_system">Use System Wallpaper</string>
     <string name="wallpaper_open_system_picker">Open System Wallpaper Picker</string>
     <string name="wallpaper_system_footer">With the system wallpaper, Liquid Glass may not be able to blur the background on Android 13 and later.</string>
