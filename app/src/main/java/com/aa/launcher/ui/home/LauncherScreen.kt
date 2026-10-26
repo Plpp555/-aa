@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -69,8 +69,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,7 +110,6 @@ import com.aa.launcher.ui.today.WidgetPickerSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Composable
@@ -226,27 +223,38 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
     val pages = remember(layout, settings.showTodayView, settings.showAppLibrary, vm.drag.active) {
         buildPages(layout, settings, vm.drag.active)
     }
-    val pagesState = rememberUpdatedState(pages)
-    val firstHome = pages.indexOfFirst { it is PageModel.Home }.coerceAtLeast(0)
-    val lastHome = pages.indexOfLast { it is PageModel.Home && !it.isExtra }.coerceAtLeast(firstHome)
-    val pagerState = rememberPagerState(initialPage = firstHome) { pagesState.value.size }
-    val scope = rememberCoroutineScope()
-    // 折りたたみを開いた画面・タブレットでは 2 ページを並べて表示する
+    // 折りたたみを開いた画面では、ホームを 2 ページずつの見開きにする (今日の表示・1+2・3+4・…・App ライブラリ)
     val twoPane = isTwoPane()
+    val spreads = remember(pages, twoPane) { buildSpreads(pages, twoPane) }
+    val spreadsState = rememberUpdatedState(spreads)
+    val firstHome = spreads.indexOfFirst { it.isHome }.coerceAtLeast(0)
+    val lastHome = spreads.indexOfLast { it.isHome && !it.isExtraOnly }.coerceAtLeast(firstHome)
+    val pagerState = rememberPagerState(initialPage = firstHome) { spreadsState.value.size }
+    val scope = rememberCoroutineScope()
+    val shownPage = remember { ShownPage() }
 
-    // 表示中のページ (ドラッグの当たり判定用)
+    // 表示中のページ (ドラッグの当たり判定用。見開きなら左右のページ)
     SideEffect {
-        vm.drag.currentPageId = (pages.getOrNull(pagerState.currentPage) as? PageModel.Home)?.page?.id
-        vm.drag.secondPageId = if (twoPane) (pages.getOrNull(pagerState.currentPage + 1) as? PageModel.Home)?.page?.id else null
+        val current = spreads.getOrNull(pagerState.currentPage)
+        shownPage.key = current?.firstKey
+        vm.drag.currentPageId = current?.leftHome?.page?.id
+        vm.drag.secondPageId = (current as? Spread.Two)?.right?.page?.id
+    }
+
+    // 折りたたみの開閉で見開きの構成が変わったら、見ていたページを含む画面へ移る
+    LaunchedEffect(twoPane) {
+        val key = shownPage.key ?: return@LaunchedEffect
+        val index = spreadsState.value.indexOfFirst { it.contains(key) }
+        if (index >= 0 && index != pagerState.currentPage) pagerState.scrollToPage(index)
     }
 
     LaunchedEffect(vm) {
         vm.events.collect { event ->
-            val list = pagesState.value
+            val list = spreadsState.value
             val target = when (event) {
-                LauncherEvent.ScrollToFirstHome -> list.indexOfFirst { it is PageModel.Home }
-                LauncherEvent.ScrollToToday -> list.indexOfFirst { it is PageModel.Today }
-                LauncherEvent.ScrollToLibrary -> list.indexOfFirst { it is PageModel.Library }
+                LauncherEvent.ScrollToFirstHome -> list.indexOfFirst { it.isHome }
+                LauncherEvent.ScrollToToday -> list.indexOfFirst { (it as? Spread.Single)?.page is PageModel.Today }
+                LauncherEvent.ScrollToLibrary -> list.indexOfFirst { (it as? Spread.Single)?.page is PageModel.Library }
                 is LauncherEvent.ScrollBy -> (pagerState.currentPage + event.delta).coerceIn(0, list.size - 1)
             }
             if (target >= 0) {
@@ -261,12 +269,9 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         if (edge == 0 || !vm.drag.active) return@LaunchedEffect
         delay(600)
         while (true) {
-            val list = pagesState.value
+            val list = spreadsState.value
             val next = pagerState.currentPage + edge
-            // 2 ページ表示で右へ送るときは、新しく見えるページ (右隣の次) がホームかどうかで判断する
-            val revealed = if (twoPane && edge > 0) pagerState.currentPage + 2 else next
-            val ok = revealed in list.indices && list[revealed] is PageModel.Home
-            if (ok) pagerState.animateScrollToPage(next)
+            if (next in list.indices && list[next].isHome) pagerState.animateScrollToPage(next)
             delay(900)
         }
     }
@@ -320,10 +325,43 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         val indicatorH = 40.dp
         val bottomReserved = navBottom + 8.dp + dockH + indicatorH
 
-        val onHome = pages.getOrNull(pagerState.currentPage) is PageModel.Home ||
-            (twoPane && pages.getOrNull(pagerState.currentPage + 1) is PageModel.Home)
+        val onHome = spreads.getOrNull(pagerState.currentPage)?.isHome == true
         // 縦スワイプは修飾子を付けたまま、押した時点の状態で有効/無効を判断する (HomeGrid.homeVerticalSwipe 参照)
         val verticalSwipeEnabled = rememberUpdatedState(onHome && !vm.drag.active && !vm.hasOverlay)
+
+        /** ホームの 1 ページ ([page] が null なら何も置かれていない空のページ)。長押しで編集モードなど背景の操作は同じ。 */
+        @Composable
+        fun HomePageBox(page: PageModel.Home?) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .homeBackgroundGestures(
+                        vm = vm,
+                        doubleTapEnabled = settings.doubleTapAction != GestureAction.NONE,
+                        onTap = { if (vm.editMode) vm.exitEditMode() },
+                        onLongPress = {
+                            view.haptic(settings.haptics)
+                            vm.enterEditMode()
+                        },
+                        onDoubleTap = { vm.performGesture(GestureType.DOUBLE_TAP, context) },
+                    ),
+            ) {
+                if (page != null) {
+                    HomeGridPage(
+                        page = page.page,
+                        vm = vm,
+                        callbacks = callbacks,
+                        modifier = Modifier.padding(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = statusTop + if (vm.editMode) 52.dp else 16.dp,
+                            bottom = bottomReserved,
+                        ),
+                    )
+                }
+            }
+        }
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -335,60 +373,38 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
                     screenHeight = { with(density) { maxHeight.toPx() } },
                     onGesture = { vm.performGesture(it, context) },
                 ),
-            pageSize = if (twoPane) HalfPageSize else PageSize.Fill,
             beyondViewportPageCount = 1,
             userScrollEnabled = !vm.drag.active,
-            key = { index -> pagesState.value.getOrNull(index)?.key ?: index },
+            key = { index -> spreadsState.value.getOrNull(index)?.key ?: index },
         ) { index ->
-            val page = pages.getOrNull(index) ?: return@HorizontalPager
-            // 見えているページ (スクロール中は隣のページも) だけ定期処理を動かす
-            val active by remember(index, twoPane) {
-                derivedStateOf {
-                    val d = index - (pagerState.currentPage + pagerState.currentPageOffsetFraction)
-                    d > -1f && d < if (twoPane) 2f else 1f
-                }
+            val spread = spreads.getOrNull(index) ?: return@HorizontalPager
+            // 見えている画面 (スクロール中は隣の画面も) だけ定期処理を動かす
+            val active by remember(index) {
+                derivedStateOf { abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - index) < 1f }
             }
             Box(
                 Modifier
                     .fillMaxSize()
-                    // 2 ページ表示ではページ全体の回転・拡大効果は合わないのでスライドのみ
+                    // 見開きではページ全体の回転・拡大効果は合わないのでスライドのみ
                     .pageEffect(pagerState, index, if (twoPane) PageEffect.SLIDE else settings.pageEffect),
             ) {
                 CompositionLocalProvider(LocalContentActive provides active) {
-                when (page) {
-                    // 今日の表示は大画面でも引き伸ばさない (スマホの幅では効かない)
-                    PageModel.Today -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                        TodayPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
+                    when (spread) {
+                        is Spread.Two -> Row(Modifier.fillMaxSize()) {
+                            Box(Modifier.weight(1f).fillMaxHeight()) { HomePageBox(spread.left) }
+                            // ページ数が奇数なら右は空のページ (ドラッグ中は新規ページとして置ける)
+                            Box(Modifier.weight(1f).fillMaxHeight()) { HomePageBox(spread.right) }
+                        }
+                        is Spread.Single -> when (val page = spread.page) {
+                            // 今日の表示は大画面でも引き伸ばさない (スマホの幅では効かない)
+                            PageModel.Today -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                TodayPage(vm, Modifier.widthIn(max = MaxPanelWidth).fillMaxSize())
+                            }
+                            // App ライブラリは幅に応じて列を増やす (LibraryColumns)
+                            PageModel.Library -> AppLibraryPage(vm, Modifier.fillMaxSize())
+                            is PageModel.Home -> HomePageBox(page)
+                        }
                     }
-                    // App ライブラリは幅に応じて列を増やす (LibraryColumns)
-                    PageModel.Library -> AppLibraryPage(vm, Modifier.fillMaxSize())
-                    is PageModel.Home -> Box(
-                        Modifier
-                            .fillMaxSize()
-                            .homeBackgroundGestures(
-                                vm = vm,
-                                doubleTapEnabled = settings.doubleTapAction != GestureAction.NONE,
-                                onTap = { if (vm.editMode) vm.exitEditMode() },
-                                onLongPress = {
-                                    view.haptic(settings.haptics)
-                                    vm.enterEditMode()
-                                },
-                                onDoubleTap = { vm.performGesture(GestureType.DOUBLE_TAP, context) },
-                            ),
-                    ) {
-                        HomeGridPage(
-                            page = page.page,
-                            vm = vm,
-                            callbacks = callbacks,
-                            modifier = Modifier.padding(
-                                start = 12.dp,
-                                end = 12.dp,
-                                top = statusTop + if (vm.editMode) 52.dp else 16.dp,
-                                bottom = bottomReserved,
-                            ),
-                        )
-                    }
-                }
                 }
             }
         }
@@ -397,31 +413,21 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
-                // 2 ページ表示ではドックを 1 ページ分の幅にして、見えているホームのページの下に付いていく
-                // (今日の表示や App ライブラリに重ならない)。配置段階で動かすので、ドロップ先の位置もそれに合う
+                // 見開きではドックを 1 ページ分の幅で中央 (左右のページの間) に置く
                 .width(pageWidth)
-                .offset {
-                    if (!twoPane) return@offset IntOffset.Zero
-                    val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    IntOffset(dockPlacement(pages, pos, pageWidth.toPx()).second.roundToInt(), 0)
-                }
                 .padding(bottom = navBottom + 8.dp)
                 .graphicsLayer {
                     val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    val a = if (twoPane) {
-                        dockPlacement(pages, pos, size.width).first
-                    } else {
-                        when {
-                            pos < firstHome -> 1f - (firstHome - pos)
-                            pos > lastHome && !vm.drag.active -> 1f - (pos - lastHome)
-                            else -> 1f
-                        }.coerceIn(0f, 1f)
-                    }
+                    val a = when {
+                        pos < firstHome -> 1f - (firstHome - pos)
+                        pos > lastHome && !vm.drag.active -> 1f - (pos - lastHome)
+                        else -> 1f
+                    }.coerceIn(0f, 1f)
                     alpha = a
                     translationY = (1f - a) * 120.dp.toPx()
                 },
         ) {
-            val homeIndices = pages.indices.filter { pages[it] is PageModel.Home }
+            val homeIndices = spreads.indices.filter { spreads[it].isHome }
             val currentHome = homeIndices.indexOf(pagerState.currentPage).coerceAtLeast(0)
             PageIndicator(
                 pageCount = homeIndices.size,
@@ -445,7 +451,7 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         ) {
             EditModeBar(
                 onAddWidget = {
-                    val page = pages.getOrNull(pagerState.currentPage) as? PageModel.Home
+                    val page = spreads.getOrNull(pagerState.currentPage)?.leftHome
                     vm.widgetPicker = WidgetTarget.HomePageTarget(page?.page?.id?.takeIf { it != EXTRA_PAGE_ID })
                 },
                 onCustomize = { vm.customizeOpen = true },
@@ -457,32 +463,66 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
 }
 
 /**
- * 2 ページ表示のドック: (不透明度, 横方向のずれ)。見えているホームのページの下に置く。
- * ホームが左右に並ぶときは中央 (ずれ 0)、片側だけならその下 (±半ページ)。ホームが見えている幅に応じてフェードする。
- * [pageWidth] は 1 ページ (= ドック) の幅、画面の幅はその 2 倍。
+ * ページャーの 1 画面分。スマホ・タブレットは 1 ページずつ ([Single])、
+ * 折りたたみを開いた画面ではホームを 2 ページずつの見開き ([Two]) にする。今日の表示と App ライブラリは見開きでも 1 画面。
  */
-private fun dockPlacement(pages: List<PageModel>, pos: Float, pageWidth: Float): Pair<Float, Float> {
-    var visible = 0f
-    var weighted = 0f
-    val first = floor(pos).toInt()
-    for (i in first..first + 2) {
-        if (pages.getOrNull(i) !is PageModel.Home) continue
-        val left = ((i - pos) * pageWidth).coerceIn(0f, 2 * pageWidth)
-        val right = ((i - pos + 1) * pageWidth).coerceIn(0f, 2 * pageWidth)
-        val w = right - left
-        if (w <= 0f) continue
-        visible += w
-        weighted += w * (left + right) / 2f
+private sealed interface Spread {
+    val key: String
+    /** ホームのページを含むか (ドック・縦スワイプ・ページ送りの判断に使う)。 */
+    val isHome: Boolean
+    /** ドラッグ中に追加される新規ページだけの画面か。 */
+    val isExtraOnly: Boolean
+    /** 左 (または唯一) のホームのページ。 */
+    val leftHome: PageModel.Home?
+    val firstKey: String
+
+    fun contains(pageKey: String): Boolean
+
+    data class Single(val page: PageModel) : Spread {
+        override val key: String get() = page.key
+        override val isHome: Boolean get() = page is PageModel.Home
+        override val isExtraOnly: Boolean get() = (page as? PageModel.Home)?.isExtra == true
+        override val leftHome: PageModel.Home? get() = page as? PageModel.Home
+        override val firstKey: String get() = page.key
+        override fun contains(pageKey: String) = page.key == pageKey
     }
-    val alpha = (visible / pageWidth).coerceIn(0f, 1f)
-    val shift = if (visible > 0f) (weighted / visible - pageWidth).coerceIn(-pageWidth / 2f, pageWidth / 2f) else 0f
-    return alpha to shift
+
+    /** 見開き。[right] が null なら右は空のページ (ページ数が奇数のとき)。 */
+    data class Two(val left: PageModel.Home, val right: PageModel.Home?) : Spread {
+        override val key: String get() = "spread:" + left.key
+        override val isHome: Boolean get() = true
+        override val isExtraOnly: Boolean get() = left.isExtra
+        override val leftHome: PageModel.Home get() = left
+        override val firstKey: String get() = left.key
+        override fun contains(pageKey: String) = left.key == pageKey || right?.key == pageKey
+    }
 }
 
-/** 2 ページ表示用: 各ページをページャーの幅の半分にする。 */
-private object HalfPageSize : PageSize {
-    override fun Density.calculateMainAxisPageSize(availableSpace: Int, pageSpacing: Int): Int = (availableSpace - pageSpacing) / 2
+private fun buildSpreads(pages: List<PageModel>, twoPane: Boolean): List<Spread> {
+    if (!twoPane) return pages.map { Spread.Single(it) }
+    val out = ArrayList<Spread>()
+    var pending: PageModel.Home? = null
+    for (page in pages) {
+        if (page is PageModel.Home) {
+            val left = pending
+            if (left == null) {
+                pending = page
+            } else {
+                out += Spread.Two(left, page)
+                pending = null
+            }
+        } else {
+            pending?.let { out += Spread.Two(it, null) }
+            pending = null
+            out += Spread.Single(page)
+        }
+    }
+    pending?.let { out += Spread.Two(it, null) }
+    return out
 }
+
+/** 表示中のページのキー (折りたたみの開閉で見開きの構成が変わったときに、同じページを表示し続けるため)。 */
+private class ShownPage(var key: String? = null)
 
 /** ページめくり効果 (スライド / 奥行き / キューブ / フェード)。 */
 private fun Modifier.pageEffect(state: PagerState, index: Int, effect: PageEffect): Modifier =
