@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# 第 2 弾: ドラッグでのフォルダ作成、ウィジェット追加、カスタマイズ、ダークモード、壁紙、日本語表示。
+set -u
+source "$(dirname "$0")/smoke_lib.sh"
+
+setup_app
+tap_text "Get Started"
+sleep 2
+
+# テスト中は編集モードの揺れを止める (アニメーション中は uiautomator が待たされるため)
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route animations
+sleep 2
+tap_text "Wiggle in Edit Mode"
+shot 13_animations_settings 1
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+
+# YouTube を YT Music に重ねてフォルダを作る (長押し → そのままドラッグ)
+A=$(find_text "YouTube"); B=$(find_text "YT Music")
+echo "YouTube=$A YTMusic=$B"
+if [ -n "$A" ] && [ -n "$B" ]; then
+  set -- $A $B
+  drag_to "$1" "$(($2 - 90))" "$3" "$(($4 - 90))"
+  # フォルダを作っても開かないこと (開いていればフォルダ内の YouTube のラベルが見える)
+  shot 14_folder_created 2
+  dump_texts folder
+  if grep -q 'text="YouTube"' "$OUT/ui.xml"; then echo "FOLDER_AUTO_OPEN: opened"; else echo "FOLDER_AUTO_OPEN: stayed closed"; fi
+  # 編集モードのままフォルダを開き、App の「−」で削除シート (App を削除 / ホーム画面から取り除く) が出ること
+  F=$(find_text "Entertainment")
+  if [ -n "$F" ]; then set -- $F; adb shell input tap "$1" "$(($2 - 90))"; fi
+  shot 14b_folder_edit 2
+  M=$(find_text_near "Remove" "YouTube")
+  echo "folder minus -> ${M:-not found}"
+  [ -n "$M" ] && adb shell input tap $M
+  shot 14c_folder_remove_sheet 2
+  dump_texts folder_remove_sheet
+  tap_text "Cancel"
+  sleep 1
+  adb shell input keyevent KEYCODE_BACK
+  shot 15_home_folder 2
+  dump_texts home_after_folder
+fi
+
+# 並べ替え: Maps を Calendar の位置へ
+A=$(find_text "Maps"); B=$(find_text "Calendar")
+if [ -n "$A" ] && [ -n "$B" ]; then
+  set -- $A $B
+  drag_to "$1" "$(($2 - 90))" "$(($3 - 100))" "$(($4 - 90))"
+  sleep 1
+  tap_text "Done"
+  shot 16_reordered 2
+fi
+
+# 長押しでメニューが出てから指を動かしてもドラッグへ移行すること (人の操作の間合い)
+A=$(find_text "Photos")
+if [ -n "$A" ]; then
+  set -- $A
+  hold_then_drag "$1" "$(($2 - 90))" 16b_hold_then_drag
+  sleep 1
+  if [ -n "$(find_text Done)" ]; then tap_text "Done"; else adb shell input keyevent KEYCODE_BACK; fi
+  sleep 1
+fi
+
+# ウィジェットの追加
+long_press_text "Settings"
+sleep 1
+tap_text "Edit Home Screen"
+sleep 1
+tap_text "Edit"
+shot 17_edit_menu 1
+tap_text "Add Widget"
+shot 18_widget_picker 3
+dump_texts widget_picker
+tap_text "Add"
+shot 19_widget_added 3
+
+# カスタマイズ (クリアアイコン)
+tap_text "Edit"
+sleep 1
+tap_text "Customize"
+shot 20_customize 2
+tap_text "Clear"
+sleep 2
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+tap_text "Done"
+shot 21_clear_icons 2
+
+# ダークモード
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route appearance
+sleep 2
+tap_text "Dark"
+shot 22_appearance_dark 2
+adb shell input keyevent KEYCODE_HOME
+shot 23_home_dark 3
+
+# 壁紙
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task --es route wallpaper
+shot 24_wallpaper_settings 3
+XY=$(find_text "Sunrise")
+if [ -n "$XY" ]; then set -- $XY; adb shell input tap "$1" "$(($2 - 250))"; fi
+sleep 2
+adb shell input keyevent KEYCODE_HOME
+shot 25_home_sunrise 3
+
+# フォルダを開く
+F=$(find_text "Entertainment")
+[ -z "$F" ] && F=$(find_text "Folder")
+if [ -n "$F" ]; then set -- $F; adb shell input tap "$1" "$(($2 - 90))"; fi
+shot 26_folder_dark 2
+adb shell input keyevent KEYCODE_BACK
+
+# 日本語表示
+adb shell cmd locale set-app-locales "$PKG" --locales ja-JP || true
+sleep 3
+adb shell am start -W -n "$PKG/com.aa.launcher.settings.SettingsActivity" --activity-clear-task
+shot 27_settings_ja 3
+dump_texts settings_ja
+adb shell input keyevent KEYCODE_HOME
+shot 28_home_ja 3
+adb shell input swipe 400 700 400 1600 300
+sleep 1
+adb shell input text "keisan"
+shot 29_spotlight_ja 2
+
+print_logs

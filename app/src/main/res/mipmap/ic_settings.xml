@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 7.1 以前用 (アダプティブアイコンは 8.0 以降)。8.0 以降は mipmap-anydpi-v26 を使う -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_settings_background" />
+    <item android:drawable="@drawable/ic_settings_foreground" />
+</layer-list>

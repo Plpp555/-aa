@@ -1,0 +1,37 @@
+name: 不具合の報告 / Bug report
+description: 正しく動かない点を報告する
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 何が起きたか / What happened
+      description: 期待した動作と、実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順 / Steps to reproduce
+      placeholder: |
+        1. 
+        2. 
+        3. 
+  - type: input
+    id: device
+    attributes:
+      label: 端末と Android のバージョン / Device and Android version
+      placeholder: 例 Galaxy Z Fold6 / Android 15
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Liquid Launcher のバージョン / App version
+      placeholder: 例 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: スクリーンショットなど / Screenshots
