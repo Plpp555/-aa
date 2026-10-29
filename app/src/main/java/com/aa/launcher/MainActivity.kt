@@ -1,10 +1,12 @@
 package com.aa.launcher
 
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.service.notification.NotificationListenerService
 import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -22,7 +24,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.aa.launcher.core.FrameRateController
+import com.aa.launcher.core.SystemActions
 import com.aa.launcher.core.WidgetHostManager
+import com.aa.launcher.service.BadgeNotificationListener
+import com.aa.launcher.service.NotificationState
 import com.aa.launcher.ui.home.ContextMenuState
 import com.aa.launcher.ui.home.LauncherActions
 import com.aa.launcher.ui.home.LauncherScreen
@@ -124,6 +129,15 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         widgetHost.startListening()
+        // 再生中のメディアの監視 (通知アクセスがあれば、通知リスナーの接続を待たずに始める)
+        launcherApp.mediaRepository.start()
+        // 通知アクセスがあるのにリスナーがつながっていない (アプリの更新後など) ときは再接続を頼む
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            !NotificationState.connected.value &&
+            SystemActions.isNotificationAccessGranted(this)
+        ) {
+            runCatching { NotificationListenerService.requestRebind(ComponentName(this, BadgeNotificationListener::class.java)) }
+        }
     }
 
     override fun onStop() {

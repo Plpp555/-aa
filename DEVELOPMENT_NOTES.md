@@ -73,7 +73,8 @@
 - `smoke_legacy.sh` (API 23): ホーム → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
   アイコンのスタイル (クリア/色合い/ダーク) → 壁紙設定。API 23 にない `input motionevent` / `cmd` は使わない (Launcher3 を無効化してホームにする)。
 - `smoke_island.sh` (`FLAVOR=island`): 開発者向けの切り欠き (`cmd overlay enable com.android.internal.display.cutout.emulation.hole`、API 29+) を有効にし、
-  `dumpsys battery` で充電なし → 充電中、debug ビルドの擬似メディア (`DebugMediaReceiver`、`am broadcast -n <pkg>/com.aa.launcher.debugtools.DebugMediaReceiver --es cmd play|stop`) で再生中にして、
+  `dumpsys battery` で充電なし → 充電中、debug ビルドの擬似メディア (`DebugMediaReceiver`、`am broadcast -n <pkg>/com.aa.launcher.debugtools.DebugMediaReceiver --es cmd prepare|play|stop`) で再生中にして、
+  (prepare で一時停止中のセッションを 2 つ作ってから play で再生状態だけを変える = 実機で表示されなかった状況。`ISLAND_MUSIC: shown` を出力)
   島のタップ (ぽよん・ポップアップ)、ポップアップの一時停止・戻るキー・外側タップで閉じるを撮る。最後に縦長のノッチ (`emulation.tall`) に変えて位置の追従を見る。
   島の位置はアプリが debug ビルドで出すログ (`LiquidIsland: placed hole=... rect=l,t,r,b`) から読む。タブレットでは `LiquidIsland: disabled` を確認して終わる。
   共通関数の `FLAVOR` (既定 standard) で PKG と APK のパスが変わる。`shot_top` は画面上端だけを元の解像度で撮る。
@@ -345,6 +346,12 @@ docs/screenshots.jpg  README 用スクリーンショット
   何もない島の幅は `max(120dp, 穴の幅 + 24dp)`、表示中は +96dp。画面から 8dp 以上はみ出さないよう左右を寄せる。
   取得できない (Android 8.1 以前・穴のない端末) ときは画面中央、ステータスバーの高さの中央 (上から最低 6dp)。
   取り直すのは切り欠きの余白・ステータスバーの高さ・画面幅が変わったときだけ。
+- **再生中のメディアの検出 (`MediaRepository`)**: 通知アクセスが許可されていれば、アプリの起動時とホームの表示時 (`start()`) に監視を始める
+  (通知リスナーの接続を待たない。アプリの更新後にリスナーが再接続されない端末があるため。つながっていなければ `requestRebind`、Android 7.0+)。
+  **すべてのアクティブなセッションにコールバックを付け**、どれかの状態が変わったら再生中のものを選び直す。
+  一時停止していたアプリが再生を始めてもセッションの一覧は変わらず `OnActiveSessionsChangedListener` は呼ばれないので、
+  1 つのセッションだけを見ていた最初の版は、実機で再生中の音楽が島に出なかった (コントロールセンターは開くたびに取り直すので出ていた)。
+  再生中とみなすのは PLAYING・BUFFERING・早送り・巻き戻し。曲の情報 (metadata) がなくても再生中なら出す (曲名はアプリ名)。
 - **表示**: 再生中の音楽 (`MediaRepository.nowPlaying` の isPlaying) > 充電中 (`rememberBattery`、今日の表示のバッテリーウィジェットと同じ受信) > なし。
   音楽: 左にアートワーク、右に波形 (色はアートワークの平均色を明るくしたもの)。充電: 左に稲妻、右に %。
   幅はばね (dampingRatio 0.62) で伸び縮みし、中身はクロスフェード。表示が切り替わると軽く弾む。
@@ -464,6 +471,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
 | 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 | fca4683 (PR #5) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
+| (次のコミット) | **実機で再生中の音楽が島に出ない問題を修正**: すべてのセッションの状態変化を受け取って選び直す、通知アクセスがあれば起動時から監視 (リスナーが切れていたら再接続を頼む)、曲の情報がなくても再生中なら表示。Island 版の通知アクセス・ユーザー補助の一覧の名前を標準版と区別。スモークテストに再現手順 |
 | 7240fed (PR #5) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
 
 ### Dynamic Island 版の検証結果 (2026-10-29, 7240fed)
@@ -477,6 +485,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 - Island 版・タブレット: `LiquidIsland: disabled ... sw=732` で島を出さず、システムのステータスバーのまま。
 - 最初の版 (fca4683) では、ステータスバーの領域のタップがシステムに取られてポップアップが開かず、時計が島の上に重なっていた (7240fed で修正)。
 - ぽよんの動きはスクリーンショットでは捉えられていない (実機で確認する)。
+- 実機確認 (ユーザー): 再生中の音楽以外 (位置・充電・ぽよん・タブレット/折りたたみで出ないこと等) は問題なし。再生中の音楽が出なかった → 上の修正。
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。

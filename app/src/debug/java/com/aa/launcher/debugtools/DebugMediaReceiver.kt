@@ -15,12 +15,16 @@ import android.os.SystemClock
 
 /**
  * スモークテスト用 (debug ビルドのみ): 擬似の「再生中のメディア」を作る。エミュレータには音楽アプリがないため。
- * `am broadcast -n <パッケージ>/com.aa.launcher.debugtools.DebugMediaReceiver --es cmd play` (止めるときは stop)
+ * `am broadcast -n <パッケージ>/com.aa.launcher.debugtools.DebugMediaReceiver --es cmd <コマンド>`
+ * - prepare: 一時停止中のセッションを 2 つ作る (テスト用の曲と、後から作る「別のアプリ」。別のアプリが一覧の先頭になる)
+ * - play: テスト用の曲を再生にする (prepare 済みならセッションの一覧は変わらず、再生状態だけが変わる。実機で表示されなかった状況)
+ * - stop: すべて片付ける
  */
 class DebugMediaReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.getStringExtra("cmd")) {
-            "play" -> FakeMediaSession.start(context.applicationContext)
+            "prepare" -> FakeMediaSession.prepare(context.applicationContext)
+            "play" -> FakeMediaSession.play(context.applicationContext)
             "stop" -> FakeMediaSession.stop()
         }
     }
@@ -28,11 +32,26 @@ class DebugMediaReceiver : BroadcastReceiver() {
 
 private object FakeMediaSession {
     private var session: MediaSession? = null
+    private var other: MediaSession? = null
     private var position = 42_000L
     private var startedAt = 0L
     private var playing = false
 
-    fun start(context: Context) {
+    fun prepare(context: Context) {
+        start(context, play = false)
+        // 一時停止中の別のアプリ (後から有効にしたので一覧の先頭になる)
+        val o = other ?: MediaSession(context, "LiquidSmokeOther").also { other = it }
+        o.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Other Paused App").build())
+        o.setPlaybackState(PlaybackState.Builder().setState(PlaybackState.STATE_PAUSED, 0L, 0f).build())
+        o.isActive = true
+    }
+
+    fun play(context: Context) {
+        val s = session
+        if (s == null) start(context, play = true) else setPlaying(s, true)
+    }
+
+    private fun start(context: Context, play: Boolean) {
         val s = session ?: MediaSession(context, "LiquidSmokeTest").also { session = it }
         @Suppress("DEPRECATION")
         s.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -48,16 +67,18 @@ private object FakeMediaSession {
                 .putBitmap(MediaMetadata.METADATA_KEY_ART, artwork())
                 .build(),
         )
+        setPlaying(s, play)
         s.isActive = true
-        setPlaying(s, true)
     }
 
     fun stop() {
-        session?.run {
-            isActive = false
-            release()
+        listOfNotNull(session, other).forEach {
+            it.isActive = false
+            it.release()
         }
         session = null
+        other = null
+        playing = false
     }
 
     private fun setPlaying(s: MediaSession, play: Boolean) {

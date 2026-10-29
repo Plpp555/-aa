@@ -3,4 +3,6 @@
 <resources>
     <string name="app_name" translatable="false">Liquid Launcher Island</string>
     <string name="settings_app_name">Island Launcher Settings</string>
+    <string name="notification_listener_label">Liquid Launcher Island badges &amp; media</string>
+    <string name="accessibility_service_label">Liquid Launcher Island gestures</string>
 </resources>

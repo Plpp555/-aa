@@ -51,6 +51,7 @@ class LauncherApp : Application() {
         wallpaperRepository = WallpaperRepository(this, appScope)
         usageTracker = UsageTracker(this)
         mediaRepository = MediaRepository(this)
+        mediaRepository.start()
 
         val settings = settingsRepository.settings
 

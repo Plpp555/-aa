@@ -70,9 +70,15 @@ shot_top i03_charging 2
 tap_and_shot i03_charging_poyon "$cx" "$cy"
 shot_top i03_charging_after 1
 
-# 再生中の音楽 (debug ビルドの擬似メディア): アートワークと波形、タップで Liquid Glass のポップアップ
+# 再生中の音楽 (debug ビルドの擬似メディア): アートワークと波形、タップで Liquid Glass のポップアップ。
+# 実機で表示されなかった状況を再現する: 一時停止中のセッションが先にあり (別のアプリが一覧の先頭)、
+# そのあと曲が再生を始める (セッションの一覧は変わらず、再生状態だけが変わる)
+adb shell am broadcast -n "$PKG/com.aa.launcher.debugtools.DebugMediaReceiver" --es cmd prepare
+sleep 3
+shot_top i04_paused_sessions 0
 adb shell am broadcast -n "$PKG/com.aa.launcher.debugtools.DebugMediaReceiver" --es cmd play
 shot_top i04_music 3
+if adb logcat -d -s LiquidIsland:D | grep -q "mode=MUSIC"; then echo "ISLAND_MUSIC: shown"; else echo "ISLAND_MUSIC: not shown"; fi
 shot i04_music_full 0
 adb shell input tap "$cx" "$cy"
 shot i05_popup 2
