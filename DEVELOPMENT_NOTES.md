@@ -463,8 +463,20 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 667fce6 / c4e2269 | Release ワークフローを手動実行 (バージョン指定、タグは自動作成) に対応。ユーザーが「公開して良いです」と言ったら Claude が実行する |
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
 | 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
-| (次のコミット) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
-| (次のコミット) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
+| fca4683 (PR #5) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
+| 7240fed (PR #5) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
+
+### Dynamic Island 版の検証結果 (2026-10-29, 7240fed)
+- Android CI・Android CI (debug) 成功 (Artifact は標準版 `liquid-launcher-test-build` と Island 版 `liquid-launcher-island-test-build`)。既存のスモークテストもすべて成功。
+- Island 版・API 34 (pixel_6、切り欠きの再現): 左上のパンチホール (`hole`、[0,0][136,136]) では島が左端に寄り、時刻と電池は右に並ぶ。
+  中央のノッチ (`tall`、[414,0][666,126]) に変えると島が中央に移り、時刻は左・電池は右。充電中 (稲妻と 76%)、再生中 (アートワークと波形)、
+  タップで Liquid Glass のポップアップ (Liquid Test Song / Smoke Test、進み具合、前へ/一時停止/次へ)、一時停止で再生ボタンに変わり島は充電の表示に戻る、
+  戻るキー・外側のタップで閉じる。クラッシュなし。
+- Island 版・API 23: 切り欠きを取得できないので上部の中央に小さい島 (ステータスバーに収まる大きさ)。充電の表示は正常。再生中の表示は通知アクセスを
+  有効にできない (API 23 に `cmd notification` がない) ため確認できず。
+- Island 版・タブレット: `LiquidIsland: disabled ... sw=732` で島を出さず、システムのステータスバーのまま。
+- 最初の版 (fca4683) では、ステータスバーの領域のタップがシステムに取られてポップアップが開かず、時計が島の上に重なっていた (7240fed で修正)。
+- ぽよんの動きはスクリーンショットでは捉えられていない (実機で確認する)。
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。
