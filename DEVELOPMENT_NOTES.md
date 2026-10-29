@@ -46,7 +46,8 @@
 ### 3.2 CI (GitHub Actions)
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、テスト版 (debug) を Artifact `liquid-launcher-test-build` にアップロード、その後 `lintDebug` (NewApi のみ) |
+| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleRelease` と `lintDebug` (NewApi のみ) で確認するだけ (APK は置かない) |
+| `.github/workflows/android-debug.yml` (Android CI (debug)) | すべての push / PR / 手動 | テスト版 `assembleDebug` を Artifact `liquid-launcher-test-build` にアップロード (com.aa.launcher.debug、開発用の鍵) |
 | `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
 | `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
 
@@ -420,6 +421,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 | dcd3249 / ea58297 | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
 | 667fce6 / c4e2269 | Release ワークフローを手動実行 (バージョン指定、タグは自動作成) に対応。ユーザーが「公開して良いです」と言ったら Claude が実行する |
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/-aa/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
+| (次のコミット) | テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。

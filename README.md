@@ -23,7 +23,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 - **本物の確認**: 公開版はすべて同じ非公開の鍵で署名しています。署名証明書の SHA-256 は
   `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE` です
   (各リリースのページにも APK の SHA-256 と一緒に載せています)。ここ以外で配られている APK は入れないでください
-- 開発途中のテスト版 (debug ビルド、パッケージ名 `com.aa.launcher.debug`) は Actions の Artifacts にありますが、通常は Releases の版を使ってください
+- 開発途中のテスト版 (debug ビルド、パッケージ名 `com.aa.launcher.debug`) は Actions の「Android CI (debug)」の Artifacts にありますが、通常は Releases の版を使ってください
 
 ### プライバシー
 
@@ -137,7 +137,8 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 ```
 
 GitHub Actions:
-- `.github/workflows/android.yml`: push のたびにビルドし、テスト版 (debug) を Artifacts (`liquid-launcher-test-build`) に置きます
+- `.github/workflows/android.yml` (Android CI): push のたびにビルドと lint で確認します (APK は置きません)
+- `.github/workflows/android-debug.yml` (Android CI (debug)): push のたびにテスト版 (debug) を作り、Artifacts (`liquid-launcher-test-build`) に置きます
 - `.github/workflows/release.yml`: `v1.2.3` の形のタグを push すると、非公開の鍵で署名した APK を付けて Releases に公開します
 
 また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34 と、Android 6.0 の API 23) 上で実際にランチャーを起動し、
