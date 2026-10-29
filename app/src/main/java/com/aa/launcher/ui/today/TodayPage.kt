@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -56,6 +55,7 @@ import com.aa.launcher.ui.home.MenuTarget
 import com.aa.launcher.ui.home.launcherItemGestures
 import com.aa.launcher.ui.theme.LabelShadow
 import com.aa.launcher.ui.theme.LocalLauncherSettings
+import com.aa.launcher.ui.home.launcherStatusBars
 
 /** 今日の表示 (ホーム画面の左端): 日付とウィジェットの一覧。 */
 @Composable
@@ -64,7 +64,7 @@ fun TodayPage(vm: LauncherViewModel, modifier: Modifier = Modifier) {
     val settings = LocalLauncherSettings.current
     val widgets = layout?.today.orEmpty()
     val rows = remember(widgets) { groupRows(widgets) }
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = launcherStatusBars().asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val editing = vm.todayEditMode
     val now = rememberNow(60_000L)

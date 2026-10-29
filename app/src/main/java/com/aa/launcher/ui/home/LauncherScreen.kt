@@ -28,8 +28,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
@@ -99,6 +97,7 @@ import com.aa.launcher.ui.glass.LocalGlassParams
 import com.aa.launcher.ui.glass.LocalScreenSize
 import com.aa.launcher.ui.glass.blurCompat
 import com.aa.launcher.ui.glass.liquidGlass
+import com.aa.launcher.ui.island.DynamicIsland
 import com.aa.launcher.ui.library.AppLibraryPage
 import com.aa.launcher.ui.onboarding.OnboardingOverlay
 import com.aa.launcher.ui.spotlight.SpotlightOverlay
@@ -111,6 +110,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.windowInsetsPadding
 
 @Composable
 fun LauncherScreen(vm: LauncherViewModel) {
@@ -140,6 +140,7 @@ fun LauncherScreen(vm: LauncherViewModel) {
             LocalApps provides apps,
             LocalBadges provides badges,
             LocalIconVersion provides iconVersion,
+            LocalIslandActive provides vm.islandActive,
         ) {
             BackHandler(enabled = true) { vm.onBack() }
             Box(
@@ -160,6 +161,14 @@ fun LauncherScreen(vm: LauncherViewModel) {
                     layout?.let { HomeContent(vm, it, settings) }
                 }
                 Overlays(vm, settings)
+                // Island 版だけ (標準版では何もしない)
+                DynamicIsland(
+                    haptics = settings.haptics,
+                    reduceMotion = settings.reduceMotion,
+                    showStatusBar = settings.showStatusBar,
+                    darkWallpaper = wallpaper.isDark,
+                    onActiveChange = { vm.islandActive = it },
+                )
                 DragLayer(vm)
             }
         }
@@ -313,7 +322,7 @@ private fun HomeContent(vm: LauncherViewModel, layout: HomeLayout, settings: Lau
         )
     }
 
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = launcherStatusBars().asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -558,7 +567,7 @@ private fun Modifier.pageEffect(state: PagerState, index: Int, effect: PageEffec
 @Composable
 private fun EditModeBar(onAddWidget: () -> Unit, onCustomize: () -> Unit, onEditPages: () -> Unit, onDone: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    Box(Modifier.fillMaxWidth().windowInsetsPadding(launcherStatusBars()).padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(
             Modifier
                 .align(Alignment.CenterStart)

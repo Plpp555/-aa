@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Island 版 (Dynamic Island あり) の名前。標準版と並べて入れたときに区別できるようにする -->
+<resources>
+    <string name="app_name" translatable="false">Liquid Launcher Island</string>
+    <string name="settings_app_name">Island Launcher Settings</string>
+    <string name="notification_listener_label">Liquid Launcher Island badges &amp; media</string>
+    <string name="accessibility_service_label">Liquid Launcher Island gestures</string>
+</resources>

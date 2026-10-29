@@ -14,7 +14,8 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 ## ダウンロードとインストール
 
-1. [Releases](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest) から `LiquidLauncher-<バージョン>.apk` をダウンロード
+1. [Releases](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest) から `LiquidLauncher-<バージョン>.apk` (標準版) か
+   `LiquidLauncherIsland-<バージョン>.apk` (Dynamic Island 版) をダウンロード
 2. 端末で開いてインストール (「提供元不明のアプリ」の許可を求められたら、使っているブラウザやファイルアプリに許可)
 3. ホームボタンを押して「Liquid Launcher」を選ぶ (または初回の案内から「デフォルトのホームアプリに設定」)
 
@@ -24,6 +25,10 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
   `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE` です
   (各リリースのページにも APK の SHA-256 と一緒に載せています)。ここ以外で配られている APK は入れないでください
 - 開発途中のテスト版 (debug ビルド、パッケージ名 `com.aa.launcher.debug`) は Actions の「Android CI (debug)」の Artifacts にありますが、通常は Releases の版を使ってください
+- **Dynamic Island 版** (`LiquidLauncherIsland-<バージョン>.apk`、v1.1.0〜): 画面上部のカメラ穴を中心に Dynamic Island を表示する版です
+  (充電中・再生中の音楽、タップで弾む、再生中はタップで Liquid Glass のポップアップ。スマホのみ)。
+  パッケージ名が違う (`com.aa.launcher.island`) ので標準版と並べて入れられます (配置や設定は別。移るときは設定のバックアップ/復元を使ってください)。
+  再生中の音楽の表示には、その版の「通知へのアクセス」の許可が必要です。テスト版は Artifacts の `liquid-launcher-island-test-build` です
 
 ### プライバシー
 
@@ -138,8 +143,9 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 GitHub Actions:
 - `.github/workflows/android.yml` (Android CI): push のたびにビルドと lint で確認します (APK は置きません)
-- `.github/workflows/android-debug.yml` (Android CI (debug)): push のたびにテスト版 (debug) を作り、Artifacts (`liquid-launcher-test-build`) に置きます
-- `.github/workflows/release.yml`: `v1.2.3` の形のタグを push すると、非公開の鍵で署名した APK を付けて Releases に公開します
+- `.github/workflows/android-debug.yml` (Android CI (debug)): push のたびにテスト版 (debug) を作り、Artifacts に置きます (標準版 `liquid-launcher-test-build`、Dynamic Island 版 `liquid-launcher-island-test-build`)
+- 2 つの版は Gradle の product flavor (`standard` / `island`) で 1 つのコードから作ります (例: `./gradlew assembleStandardDebug`、`./gradlew assembleIslandDebug`)
+- `.github/workflows/release.yml`: `v1.2.3` の形のタグを push すると、非公開の鍵で署名した APK (標準版と Dynamic Island 版) を付けて Releases に公開します
 
 また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34 と、Android 6.0 の API 23) 上で実際にランチャーを起動し、
 初回案内 → ホーム画面 → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
@@ -207,6 +213,7 @@ running Android 6.0 or later. The UI is available in English and Japanese.
 
 - **Download**: get `LiquidLauncher-<version>.apk` from [Releases](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest),
   install it, then choose Liquid Launcher as your home app. New versions install over the old one.
+  `LiquidLauncherIsland-<version>.apk` adds a Dynamic Island around the camera cutout (phones only; installs alongside the standard edition).
 - **Authenticity**: every release is signed with the same private key; its certificate SHA-256 is
   `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE`.
 - **Privacy**: no internet permission and no data collection. Optional permissions (notification access,

@@ -1,5 +1,9 @@
 package com.aa.launcher.ui.home
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
@@ -50,6 +54,21 @@ fun isTwoPane(): Boolean {
     val ratio = maxOf(w, h).toFloat() / minOf(w, h)
     return foldable || ratio <= 1.3f
 }
+
+/**
+ * Island 版で Dynamic Island を表示中か。このときシステムのステータスバーを隠す
+ * (ステータスバーの領域のタッチはシステムが受け取るので、隠さないと島をタップできない)。時刻と電池は島の左右に自前で描く。
+ */
+val LocalIslandActive = compositionLocalOf { false }
+
+/**
+ * ホーム画面の上端に空けるステータスバーの領域。Island 版はシステムのステータスバーを隠して自前で描くので、
+ * 隠していても同じ高さを空ける (標準版は従来どおり、設定で隠すと詰める)。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun launcherStatusBars(): WindowInsets =
+    if (LocalIslandActive.current) WindowInsets.statusBarsIgnoringVisibility else WindowInsets.statusBars
 
 /** 大画面で、今日の表示・App ライブラリ・シートなどを引き伸ばさないための最大幅。スマホの幅では効かない。 */
 val MaxPanelWidth = 560.dp

@@ -1,10 +1,12 @@
 package com.aa.launcher
 
+import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.service.notification.NotificationListenerService
 import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -17,11 +19,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.aa.launcher.core.FrameRateController
+import com.aa.launcher.core.SystemActions
 import com.aa.launcher.core.WidgetHostManager
+import com.aa.launcher.service.BadgeNotificationListener
+import com.aa.launcher.service.NotificationState
 import com.aa.launcher.ui.home.ContextMenuState
 import com.aa.launcher.ui.home.LauncherActions
 import com.aa.launcher.ui.home.LauncherScreen
@@ -84,16 +90,20 @@ class MainActivity : ComponentActivity() {
         // 壁紙・ステータスバーの表示をウィンドウに反映
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                combine(vm.settings, vm.wallpaper) { s, w -> Triple(s.showStatusBar, w.image == null, w.isDark) }
+                combine(vm.settings, vm.wallpaper, snapshotFlow { vm.islandActive }) { s, w, island ->
+                    WindowLook(s.showStatusBar, w.image == null, w.isDark, island)
+                }
                     .distinctUntilChanged()
-                    .collect { (showStatusBar, showSystemWallpaper, darkWallpaper) ->
-                        applyWindow(showStatusBar, showSystemWallpaper, darkWallpaper)
-                    }
+                    .collect { applyWindow(it) }
             }
         }
     }
 
-    private fun applyWindow(showStatusBar: Boolean, showSystemWallpaper: Boolean, darkWallpaper: Boolean) {
+    /** ウィンドウに反映する表示。[island] は Island 版で Dynamic Island を表示中 (システムのステータスバーを隠す)。 */
+    private data class WindowLook(val showStatusBar: Boolean, val showSystemWallpaper: Boolean, val darkWallpaper: Boolean, val island: Boolean)
+
+    private fun applyWindow(look: WindowLook) {
+        val (showStatusBar, showSystemWallpaper, darkWallpaper, island) = look
         if (showSystemWallpaper) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -103,7 +113,15 @@ class MainActivity : ComponentActivity() {
             window.setBackgroundDrawable(null)
         }
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        if (showStatusBar) controller.show(WindowInsetsCompat.Type.statusBars()) else controller.hide(WindowInsetsCompat.Type.statusBars())
+        if (island) {
+            // ステータスバーの領域のタッチはシステムが受け取るので、隠さないと島をタップできない。
+            // 時刻と電池は島の左右に自前で描く。上端からスワイプすると一時的にシステムのステータスバーが出る
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            if (showStatusBar) controller.show(WindowInsetsCompat.Type.statusBars()) else controller.hide(WindowInsetsCompat.Type.statusBars())
+        }
         controller.isAppearanceLightStatusBars = !darkWallpaper
         controller.isAppearanceLightNavigationBars = !darkWallpaper
     }
@@ -111,6 +129,15 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         widgetHost.startListening()
+        // 再生中のメディアの監視 (通知アクセスがあれば、通知リスナーの接続を待たずに始める)
+        launcherApp.mediaRepository.start()
+        // 通知アクセスがあるのにリスナーがつながっていない (アプリの更新後など) ときは再接続を頼む
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            !NotificationState.connected.value &&
+            SystemActions.isNotificationAccessGranted(this)
+        ) {
+            runCatching { NotificationListenerService.requestRebind(ComponentName(this, BadgeNotificationListener::class.java)) }
+        }
     }
 
     override fun onStop() {

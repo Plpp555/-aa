@@ -81,23 +81,29 @@ jobs:
           export RELEASE_KEYSTORE_PATH="$RUNNER_TEMP/release.p12"
           export RELEASE_VERSION="$VERSION"
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          # 標準版と Dynamic Island 版の両方を作る
+          ./gradlew --no-daemon assembleStandardRelease assembleIslandRelease
           rm -f "$RUNNER_TEMP/release.p12"
 
       - name: Verify signature and prepare files
         run: |
           APK="LiquidLauncher-$VERSION.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          ISLAND_APK="LiquidLauncherIsland-$VERSION.apk"
+          cp app/build/outputs/apk/standard/release/app-standard-release.apk "$APK"
+          cp app/build/outputs/apk/island/release/app-island-release.apk "$ISLAND_APK"
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
-          # 開発用の鍵 (公開されている) で署名されていたら止める
-          if grep -qi "A1:8E:C5:9B\|a18ec59b" certs.txt; then
-            echo "::error::開発用の鍵で署名されています"
-            exit 1
-          fi
-          sha256sum "$APK" > "$APK.sha256"
+          for f in "$APK" "$ISLAND_APK"; do
+            "$APKSIGNER" verify --print-certs "$f" | tee "$f.certs.txt"
+            # 開発用の鍵 (公開されている) で署名されていたら止める
+            if grep -qi "A1:8E:C5:9B\|a18ec59b" "$f.certs.txt"; then
+              echo "::error::$f が開発用の鍵で署名されています"
+              exit 1
+            fi
+            sha256sum "$f" > "$f.sha256"
+          done
           echo "APK=$APK" >> "$GITHUB_ENV"
-          echo "CERT=$(grep -m1 'SHA-256 digest' certs.txt | sed 's/.*: //')" >> "$GITHUB_ENV"
+          echo "ISLAND_APK=$ISLAND_APK" >> "$GITHUB_ENV"
+          echo "CERT=$(grep -m1 'SHA-256 digest' "$APK.certs.txt" | sed 's/.*: //')" >> "$GITHUB_ENV"
 
       - name: Release notes
         run: |
@@ -109,9 +115,11 @@ jobs:
           {
             echo ""
             echo "---"
-            echo "**ダウンロード**: \`$APK\` (Android 6.0 以降)"
-            echo ""
-            echo "SHA-256: \`$(cut -d' ' -f1 "$APK.sha256")\`"
+            echo "**ダウンロード** (Android 6.0 以降)"
+            echo "- 標準版: \`$APK\`"
+            echo "  SHA-256: \`$(cut -d' ' -f1 "$APK.sha256")\`"
+            echo "- Dynamic Island 版 (スマホのみ。標準版と並べて入れられます): \`$ISLAND_APK\`"
+            echo "  SHA-256: \`$(cut -d' ' -f1 "$ISLAND_APK.sha256")\`"
             echo ""
             echo "署名証明書の SHA-256: \`$CERT\`"
           } >> notes.md
@@ -127,3 +135,5 @@ jobs:
           files: |
             ${{ env.APK }}
             ${{ env.APK }}.sha256
+            ${{ env.ISLAND_APK }}
+            ${{ env.ISLAND_APK }}.sha256

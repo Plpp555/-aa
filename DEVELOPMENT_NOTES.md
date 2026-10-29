@@ -16,7 +16,9 @@
      操作中は端末の最高リフレッシュレート、クリアアイコン消失の修正、CPU/GPU/メモリ/電池の最適化。
      **品質・アニメーション・操作感・既存機能を犠牲にする軽量化は禁止。**
 - **アプリ名**: Liquid Launcher (設定アプリ側の表示名: Launcher Settings / ランチャー設定)
-- **パッケージ**: `com.aa.launcher` (debug ビルドは `com.aa.launcher.debug`)
+- **パッケージ**: `com.aa.launcher` (debug ビルドは `com.aa.launcher.debug`)。Dynamic Island 版は `com.aa.launcher.island` (debug は `com.aa.launcher.island.debug`)
+- **2 つの版 (product flavor `edition`)**: `standard` (標準版、既定) と `island` (Dynamic Island 版、6.12)。1 つのコードから作り、違いは `BuildConfig.DYNAMIC_ISLAND` と
+  `app/src/island/res` (アプリ名 Liquid Launcher Island) だけ。タスク名は `assembleStandardDebug` / `assembleIslandDebug` など、APK は `app/build/outputs/apk/<版>/<debug|release>/`
 - **リポジトリ**: `Plpp555/liquid-OS-Android-launcher` (公開、MIT License。2026-10-29 に `Plpp555/-aa` から名前を変更、古い URL は GitHub が転送する)。`main` が公開版。作業は `main` から作ったブランチで行い、Pull Request で `main` に入れる (PR #1 で初版を main にマージ)
 - **言語**: UI は英語 (既定) と日本語。コードのコメントは日本語。ユーザーとのやり取りも日本語。
 
@@ -46,10 +48,10 @@
 ### 3.2 CI (GitHub Actions)
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleRelease` と `lintDebug` (NewApi のみ) で確認するだけ (APK は置かない) |
-| `.github/workflows/android-debug.yml` (Android CI (debug)) | すべての push / PR / 手動 | テスト版 `assembleDebug` を Artifact `liquid-launcher-test-build` にアップロード (com.aa.launcher.debug、開発用の鍵) |
-| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
-| `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
+| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | 両方の版の `assembleRelease` と `lintStandardDebug lintIslandDebug` (NewApi のみ) で確認するだけ (APK は置かない) |
+| `.github/workflows/android-debug.yml` (Android CI (debug)) | すべての push / PR / 手動 | テスト版 `assembleDebug` を Artifact にアップロード: 標準版 `liquid-launcher-test-build` (com.aa.launcher.debug)、Dynamic Island 版 `liquid-launcher-island-test-build` (com.aa.launcher.island.debug)。開発用の鍵 |
+| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を 2 つ (`LiquidLauncher-<版>.apk` = 標準版、`LiquidLauncherIsland-<版>.apk` = Dynamic Island 版。v1.1.0〜) を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
+| `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh`、タブレット/折りたたみで `smoke_wide.sh`、Island 版 (`flavor: island`) で `smoke_island.sh` (pixel_6 API 34・API 23・pixel_tablet) を別ジョブで実行 |
 
 - 実行状況は `curl -s https://api.github.com/repos/Plpp555/liquid-OS-Android-launcher/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
 - 待機は `until ...; do sleep 30; done` を `run_in_background` で実行するのが良い (フォアグラウンドの sleep は不可)。
@@ -70,6 +72,12 @@
   右へドラッグして「Set」→ ホーム画面。折りたたみの再現 (FOLD_SIM=1) では続けて画面サイズを閉じた状態・開いた状態に切り替えて撮る。
 - `smoke_legacy.sh` (API 23): ホーム → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
   アイコンのスタイル (クリア/色合い/ダーク) → 壁紙設定。API 23 にない `input motionevent` / `cmd` は使わない (Launcher3 を無効化してホームにする)。
+- `smoke_island.sh` (`FLAVOR=island`): 開発者向けの切り欠き (`cmd overlay enable com.android.internal.display.cutout.emulation.hole`、API 29+) を有効にし、
+  `dumpsys battery` で充電なし → 充電中、debug ビルドの擬似メディア (`DebugMediaReceiver`、`am broadcast -n <pkg>/com.aa.launcher.debugtools.DebugMediaReceiver --es cmd prepare|play|stop`) で再生中にして、
+  (prepare で一時停止中のセッションを 2 つ作ってから play で再生状態だけを変える = 実機で表示されなかった状況。`ISLAND_MUSIC: shown` を出力)
+  島のタップ (ぽよん・ポップアップ)、ポップアップの一時停止・戻るキー・外側タップで閉じるを撮る。最後に縦長のノッチ (`emulation.tall`) に変えて位置の追従を見る。
+  島の位置はアプリが debug ビルドで出すログ (`LiquidIsland: placed hole=... rect=l,t,r,b`) から読む。タブレットでは `LiquidIsland: disabled` を確認して終わる。
+  共通関数の `FLAVOR` (既定 standard) で PKG と APK のパスが変わる。`shot_top` は画面上端だけを元の解像度で撮る。
 - `smoke2.sh`: 揺れオフ → ドラッグでフォルダ作成 → 並べ替え → 長押しメニュー後のドラッグ (Photos) → ウィジェット追加 → カスタマイズ (クリア) → ダーク → 壁紙 → フォルダ → 日本語。
 - 注意:
   - 以前は「`input motionevent` はイベントごとに downTime が変わるため長押し→ドラッグに使えない」としていたが、
@@ -149,7 +157,10 @@ app/src/main/java/com/aa/launcher/
     ├── today/                今日の表示、内蔵ウィジェット、ウィジェットギャラリー、メモ編集
     ├── spotlight/Spotlight.kt 検索 (App・設定・連絡先・計算機・Web・Play ストア)
     ├── controlcenter/ControlCenter.kt コントロールセンター
+    ├── island/DynamicIsland.kt Dynamic Island (Island 版のみ。6.12)
     └── onboarding/Onboarding.kt 初回案内
+app/src/island/res/ Island 版のアプリ名 (values, values-ja)
+app/src/debug/     debug ビルドだけの追加: 写真編集画面の外部起動、擬似の再生中メディア (debugtools/DebugMediaReceiver.kt、スモークテスト用)
 app/src/main/res/  strings (values, values-ja)、themes、アダプティブアイコン (ic_launcher, ic_settings)、accessibility_service.xml
 tools/             check_strings.py (文字列整合性)、extract_smoke_log.py (スモークテストのログ展開)
 docs/screenshots.jpg  README 用スクリーンショット
@@ -326,6 +337,41 @@ docs/screenshots.jpg  README 用スクリーンショット
 - Java 8 のコレクション API (`putIfAbsent`・`getOrDefault`・`computeIfAbsent`・`removeIf`・`List.sort`・`stream` など) は Android 7.0 以降。
   Kotlin の拡張 (`getOrPut`・`getOrElse`・`removeAll`・`sortWith` など) を使う (lint の NewApi で検出される)。
 
+### 6.12 Dynamic Island (Island 版、ui/island/DynamicIsland.kt)
+- `LauncherScreen` のオーバーレイの上に置く (`DynamicIsland(haptics, reduceMotion)`)。標準版は `BuildConfig.DYNAMIC_ISLAND = false` で何もしない (R8 で消える)。
+- **出す端末**: スマホの縦向きだけ (ユーザーの指定)。`DeviceInfo.isFoldable` (ヒンジセンサー) の端末、`smallestScreenWidthDp >= 600` (タブレット)、横向きでは出さない。
+  ヒンジセンサーを公開しない折りたたみ端末の外側の画面はスマホと区別できないので出る。
+- **位置**: カメラ穴 (切り欠き) を中心にする (ユーザーの指定)。`ViewCompat.getRootWindowInsets(view).displayCutout.boundingRects` (Android 9 以降) のうち、
+  上端 (top < 120dp) にあって横方向の中央に一番近いもの。島の高さは `max(34dp, 穴の高さ + 10dp)`、穴の中心と縦の中心をそろえる (上端に付いたノッチは上端から)。
+  何もない島の幅は `max(120dp, 穴の幅 + 24dp)`、表示中は +96dp。画面から 8dp 以上はみ出さないよう左右を寄せる。
+  取得できない (Android 8.1 以前・穴のない端末) ときは画面中央、ステータスバーの高さの中央 (上から最低 6dp)。
+  取り直すのは切り欠きの余白・ステータスバーの高さ・画面幅が変わったときだけ。
+- **再生中のメディアの検出 (`MediaRepository`)**: 通知アクセスが許可されていれば、アプリの起動時とホームの表示時 (`start()`) に監視を始める
+  (通知リスナーの接続を待たない。アプリの更新後にリスナーが再接続されない端末があるため。つながっていなければ `requestRebind`、Android 7.0+)。
+  **すべてのアクティブなセッションにコールバックを付け**、どれかの状態が変わったら再生中のものを選び直す。
+  一時停止していたアプリが再生を始めてもセッションの一覧は変わらず `OnActiveSessionsChangedListener` は呼ばれないので、
+  1 つのセッションだけを見ていた最初の版は、実機で再生中の音楽が島に出なかった (コントロールセンターは開くたびに取り直すので出ていた)。
+  再生中とみなすのは PLAYING・BUFFERING・早送り・巻き戻し。曲の情報 (metadata) がなくても再生中なら出す (曲名はアプリ名)。
+- **表示**: 再生中の音楽 (`MediaRepository.nowPlaying` の isPlaying) > 充電中 (`rememberBattery`、今日の表示のバッテリーウィジェットと同じ受信) > なし。
+  音楽: 左にアートワーク、右に波形 (色はアートワークの平均色を明るくしたもの)。充電: 左に稲妻、右に %。
+  幅はばね (dampingRatio 0.62) で伸び縮みし、中身はクロスフェード。表示が切り替わると軽く弾む。
+- **タップ**: 押すと縮み (横 0.94・縦 0.9)、離すと初速を付けたばね (横: 減衰 0.3・硬さ 480、縦: 0.34・620) で戻る = 「ぽよん」(iOS 27 の島を基準)。
+  縦横で揺れの速さが違うので弾力が出る。再生中の音楽があるときだけ、Liquid Glass のポップアップ (アートワーク・曲名・アーティスト・進み具合・前へ/再生/次へ) を
+  島から広がるように開く (scaleIn、transformOrigin = 島の中心)。外側のタップ・戻るキー・ホームから離れる (ON_STOP)・曲がなくなると閉じる。
+  アートワーク/曲名のタップで再生中のアプリを開く。「視差効果を減らす」では弾まずフェードだけ。
+- **軽さ**: 静止中は何も描き直さない。幅のアニメーションは配置とサイズの計算 (`offset {}` / `layout {}`) だけ、ぽよんは `graphicsLayer` だけで反映し、
+  中身を作り直さない。波形の位相は描画の段階でだけ読む (再構成なし)。波形が動くのは再生中かつホーム表示中だけ (他のアプリ使用中は Compose のフレームが止まる)。
+  ポップアップの進み具合は開いている間だけ秒の境目ごとに更新。新しい権限はなし (再生中の曲は既存の通知アクセスを使う)。
+- **ステータスバー**: 島を表示中はシステムのステータスバーを隠す (`vm.islandActive` → MainActivity の `applyWindow`、`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`)。
+  ステータスバーの領域のタッチはシステム (SystemUI) が受け取るため、隠さないと島をタップできない (最初の版で確認: ポップアップが開かず、時計やアイコンが島の上に重なった)。
+  代わりに時刻 (分ごと、`rememberNow`) と電池 (% とマーク) を島の左右の空きの中央に自前で描く (`IslandStatusBar`、設定「ステータスバーを表示」がオフなら描かない)。
+  左の空きが 56dp 未満 (カメラ穴が左端) なら時刻も右に並べる。上端からスワイプするとシステムのステータスバーが一時的に出る。
+  ホーム画面の上端の余白は `launcherStatusBars()` (LauncherLocals.kt) で取る: 島の表示中は `statusBarsIgnoringVisibility` (隠していても同じ高さを空ける)、それ以外は従来どおり `statusBars`。
+  電波・Wi-Fi のマークは出していない (権限が増えるため)。
+- カメラ穴がないときの島はステータスバーの高さに収まる大きさ (高さ = ステータスバー − 2dp、26〜34dp、幅は高さの 3.5 倍)。
+- ホーム画面 (このアプリ) の中だけの表示。他のアプリの上に出すには「他のアプリの上に重ねて表示」の権限と常駐が必要になるので行っていない。
+- debug ビルドはログ `LiquidIsland` に位置 (`placed hole=... rect=...`)・表示の切り替え (`mode=...`)・無効 (`disabled ...`) を出す (スモークテストが使う)。
+
 ### 6.11 権限・サービス
 - 権限: REQUEST_DELETE_PACKAGES, SET_WALLPAPER, EXPAND_STATUS_BAR, VIBRATE, USE_BIOMETRIC, READ_CONTACTS (実行時), ACCESS_NOTIFICATION_POLICY,
   SET_ALARM, WRITE_SETTINGS (特別アクセス), READ_EXTERNAL_STORAGE (≤API 32, システム壁紙の読み取り用)。
@@ -380,6 +426,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 - 大画面はエミュレータ (Pixel Tablet と、その画面サイズを Pixel Fold の内側に変えたもの) でのみ確認。折りたたみのヒンジ位置 (FoldingFeature) は考慮していない (画面中央で分割)。
   ヒンジセンサーを公開せず、開いた画面の縦横比が 1.3 を超える折りたたみ端末は 1 ページ表示になる。
 - クリア/色合いアイコンの見え方 (絵柄のアイコンなど) は実機の様々なアプリでは未確認。新しい種類で見分けにくいものがあれば 6.7 の判定を調整する。
+- Dynamic Island はエミュレータ (開発者向けの切り欠きの再現) でのみ確認。実機のカメラ穴の位置・大きさ (メーカーが登録した値) と合うか、
+  ステータスバーの時計やアイコンと重ならないかは未確認。カメラ穴が端にある端末では島も端に寄る (はみ出さないよう 8dp 内側に寄せる)。
 - スモークテストで SystemUI のクラッシュが出ることがある (Pixel Launcher 無効化の副作用、本アプリとは無関係)。
 - スモークテストで `input draganddrop` は使わない。長押し時間 (400ms) ちょうどで指を動かし始め、アプリの長押し判定 (400ms) と競合して結果が揺れる
   (75c4880 ではメニューが出たまま失敗、50b85a0 では長押し前にスクロール扱いになりフォルダ化されなかった)。8c3dcb2 で `drag_to` を motionevent 方式に変更。
@@ -421,7 +469,26 @@ docs/screenshots.jpg  README 用スクリーンショット
 | dcd3249 / ea58297 | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
 | 667fce6 / c4e2269 | Release ワークフローを手動実行 (バージョン指定、タグは自動作成) に対応。ユーザーが「公開して良いです」と言ったら Claude が実行する |
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
-| (次のコミット) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
+| 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
+| fca4683 (PR #5) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
+| (次のコミット) | Release ワークフローで Dynamic Island 版も公開 (`LiquidLauncherIsland-<版>.apk`)、CHANGELOG に 1.1.0、README |
+| 5b1031d (PR #5) | **実機で再生中の音楽が島に出ない問題を修正**: すべてのセッションの状態変化を受け取って選び直す、通知アクセスがあれば起動時から監視 (リスナーが切れていたら再接続を頼む)、曲の情報がなくても再生中なら表示。Island 版の通知アクセス・ユーザー補助の一覧の名前を標準版と区別。スモークテストに再現手順 |
+| 7240fed (PR #5) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
+
+### Dynamic Island 版の検証結果 (2026-10-29, 7240fed)
+- Android CI・Android CI (debug) 成功 (Artifact は標準版 `liquid-launcher-test-build` と Island 版 `liquid-launcher-island-test-build`)。既存のスモークテストもすべて成功。
+- Island 版・API 34 (pixel_6、切り欠きの再現): 左上のパンチホール (`hole`、[0,0][136,136]) では島が左端に寄り、時刻と電池は右に並ぶ。
+  中央のノッチ (`tall`、[414,0][666,126]) に変えると島が中央に移り、時刻は左・電池は右。充電中 (稲妻と 76%)、再生中 (アートワークと波形)、
+  タップで Liquid Glass のポップアップ (Liquid Test Song / Smoke Test、進み具合、前へ/一時停止/次へ)、一時停止で再生ボタンに変わり島は充電の表示に戻る、
+  戻るキー・外側のタップで閉じる。クラッシュなし。
+- Island 版・API 23: 切り欠きを取得できないので上部の中央に小さい島 (ステータスバーに収まる大きさ)。充電の表示は正常。再生中の表示は通知アクセスを
+  有効にできない (API 23 に `cmd notification` がない) ため確認できず。
+- Island 版・タブレット: `LiquidIsland: disabled ... sw=732` で島を出さず、システムのステータスバーのまま。
+- 最初の版 (fca4683) では、ステータスバーの領域のタップがシステムに取られてポップアップが開かず、時計が島の上に重なっていた (7240fed で修正)。
+- ぽよんの動きはスクリーンショットでは捉えられていない (実機で確認する)。
+- 実機確認 (ユーザー): 再生中の音楽以外 (位置・充電・ぽよん・タブレット/折りたたみで出ないこと等) は問題なし。再生中の音楽が出なかった → 上の修正。
+- 5b1031d: 一時停止中のセッションが 2 つ (別のアプリが一覧の先頭) ある状態から曲の再生を始めるスモークテストで、島に音楽が出る (`ISLAND_MUSIC: shown`)。
+  ポップアップ・一時停止・閉じるも従来どおり。全テスト成功。実機での再確認待ち。
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。
@@ -462,10 +529,10 @@ docs/screenshots.jpg  README 用スクリーンショット
 
 ## 11. 今後の開発予定 (候補)
 
-**Dynamic Island 版** (ユーザーの予定): 今の版と並行して配布する想定。進め方の案:
-- Gradle の product flavor (`standard` / `island`) で 1 つのコードから 2 つの APK を作る。island は `applicationIdSuffix = ".island"` で今の版と並べて入れられるようにするか、
-  同じパッケージで置き換えるかを決める。リリースは `LiquidLauncher-<版>.apk` と `LiquidLauncherIsland-<版>.apk` を同じタグで公開する。
-- 機能の差分は flavor ごとのソースセット (`src/island/`) か、`BuildConfig` のフラグで切り替える。
+**Dynamic Island 版** (ユーザーの予定): 今の版と並行して配布する。テスト版 (debug) まで作成済み (6.12)。残り:
+- 実機での確認 (カメラ穴の位置・ぽよん・ポップアップ・電池)。ユーザーの確認後に公開版を出す。
+- 公開版: v1.1.0 から Release ワークフローが `LiquidLauncherIsland-<版>.apk` を標準版と同じタグで公開する (ユーザーの実機確認後)。
+  パッケージ名は `com.aa.launcher.island` (標準版と並べて入れられる。配置や設定は別なので、移るときはバックアップ/復元を使う)。
 
 優先度高:
 - 実機での検証 (リフレッシュレート切替、通知バッジ、メディア、AppWidget、生体認証)。

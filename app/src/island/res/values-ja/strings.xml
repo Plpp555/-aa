@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_app_name">ランチャー設定 (Island)</string>
+    <string name="notification_listener_label">Liquid Launcher Island のバッジとメディア</string>
+    <string name="accessibility_service_label">Liquid Launcher Island ジェスチャー</string>
+</resources>

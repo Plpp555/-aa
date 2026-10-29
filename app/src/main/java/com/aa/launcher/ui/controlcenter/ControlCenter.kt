@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -93,6 +92,8 @@ import com.aa.launcher.settings.ControlTile
 import com.aa.launcher.ui.glass.liquidGlass
 import com.aa.launcher.ui.home.LauncherViewModel
 import com.aa.launcher.ui.theme.LocalLauncherSettings
+import com.aa.launcher.ui.home.launcherStatusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 
 private val TileShape = RoundedCornerShape(26.dp)
 private val ActiveBlue = Color(0xFF0A84FF)
@@ -142,7 +143,7 @@ private fun ControlCenterContent(vm: LauncherViewModel) {
             .fillMaxHeight()
             .widthIn(max = 440.dp)
             .fillMaxWidth()
-            .statusBarsPadding()
+            .windowInsetsPadding(launcherStatusBars())
             .navigationBarsPadding()
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {

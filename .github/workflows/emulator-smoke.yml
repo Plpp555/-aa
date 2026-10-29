@@ -31,6 +31,19 @@ jobs:
             api: 34
             profile: pixel_tablet
             fold: 1
+          # Dynamic Island 版: スマホ (切り欠きを再現)、Android 6.0 (切り欠きを取得できない)、タブレット (島を出さない)
+          - scenario: smoke_island.sh
+            api: 34
+            profile: pixel_6
+            flavor: island
+          - scenario: smoke_island.sh
+            api: 23
+            profile: pixel_6
+            flavor: island
+          - scenario: smoke_island.sh
+            api: 34
+            profile: pixel_tablet
+            flavor: island
     steps:
       - uses: actions/checkout@v5
 
@@ -46,7 +59,7 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          if [ "${{ matrix.flavor }}" = island ]; then ./gradlew --no-daemon assembleIslandDebug; else ./gradlew --no-daemon assembleStandardDebug; fi
 
       - name: Enable KVM
         run: |
@@ -66,4 +79,4 @@ jobs:
           profile: ${{ matrix.profile }}
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: FOLD_SIM=${{ matrix.fold || 0 }} bash .github/scripts/${{ matrix.scenario }}
+          script: FLAVOR=${{ matrix.flavor || 'standard' }} FOLD_SIM=${{ matrix.fold || 0 }} bash .github/scripts/${{ matrix.scenario }}

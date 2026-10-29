@@ -8,5 +8,9 @@
             android:name="com.aa.launcher.settings.WallpaperCropActivity"
             android:exported="true"
             tools:replace="android:exported" />
+        <!-- スモークテストで擬似の再生中メディアを作る (Dynamic Island の確認用) -->
+        <receiver
+            android:name="com.aa.launcher.debugtools.DebugMediaReceiver"
+            android:exported="true" />
     </application>
 </manifest>

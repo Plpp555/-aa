@@ -1,7 +1,8 @@
 name: Android CI (debug)
 
-# テスト版 (debug ビルド) を作って Artifacts に置く。
-# パッケージ名は com.aa.launcher.debug、署名は開発用の鍵なので、公開版と並べてインストールでき、テスト版どうしは上書き更新できる。
+# テスト版 (debug ビルド) を作って Artifacts に置く。標準版と Dynamic Island 版の 2 つ。
+# パッケージ名は com.aa.launcher.debug (Island 版は com.aa.launcher.island.debug)、署名は開発用の鍵なので、
+# 公開版と並べてインストールでき、テスト版どうしは上書き更新できる。
 # 公開版は Release ワークフローが非公開の鍵で署名して GitHub Releases に置く。
 on:
   push:
@@ -34,5 +35,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: liquid-launcher-test-build
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/standard/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload test build (Dynamic Island)
+        uses: actions/upload-artifact@v4
+        with:
+          name: liquid-launcher-island-test-build
+          path: app/build/outputs/apk/island/debug/*.apk
           if-no-files-found: error

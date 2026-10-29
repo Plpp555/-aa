@@ -75,6 +75,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     var openFolder by mutableStateOf<OpenFolder?>(null)
     var contextMenu by mutableStateOf<ContextMenuState?>(null)
     var spotlightOpen by mutableStateOf(false)
+    /** Island 版で Dynamic Island を表示中 (システムのステータスバーを隠す。[LocalIslandActive]) */
+    var islandActive by mutableStateOf(false)
     var controlCenterOpen by mutableStateOf(false)
     var widgetPicker by mutableStateOf<WidgetTarget?>(null)
     var actionSheet by mutableStateOf<ActionSheetState?>(null)
