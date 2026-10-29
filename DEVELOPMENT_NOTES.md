@@ -50,7 +50,7 @@
 | --- | --- | --- |
 | `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | 両方の版の `assembleRelease` と `lintStandardDebug lintIslandDebug` (NewApi のみ) で確認するだけ (APK は置かない) |
 | `.github/workflows/android-debug.yml` (Android CI (debug)) | すべての push / PR / 手動 | テスト版 `assembleDebug` を Artifact にアップロード: 標準版 `liquid-launcher-test-build` (com.aa.launcher.debug)、Dynamic Island 版 `liquid-launcher-island-test-build` (com.aa.launcher.island.debug)。開発用の鍵 |
-| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した標準版の release APK (`assembleStandardRelease`。Island 版はまだ公開しない) を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
+| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を 2 つ (`LiquidLauncher-<版>.apk` = 標準版、`LiquidLauncherIsland-<版>.apk` = Dynamic Island 版。v1.1.0〜) を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
 | `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh`、タブレット/折りたたみで `smoke_wide.sh`、Island 版 (`flavor: island`) で `smoke_island.sh` (pixel_6 API 34・API 23・pixel_tablet) を別ジョブで実行 |
 
 - 実行状況は `curl -s https://api.github.com/repos/Plpp555/liquid-OS-Android-launcher/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
@@ -471,6 +471,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
 | 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 | fca4683 (PR #5) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
+| (次のコミット) | Release ワークフローで Dynamic Island 版も公開 (`LiquidLauncherIsland-<版>.apk`)、CHANGELOG に 1.1.0、README |
 | 5b1031d (PR #5) | **実機で再生中の音楽が島に出ない問題を修正**: すべてのセッションの状態変化を受け取って選び直す、通知アクセスがあれば起動時から監視 (リスナーが切れていたら再接続を頼む)、曲の情報がなくても再生中なら表示。Island 版の通知アクセス・ユーザー補助の一覧の名前を標準版と区別。スモークテストに再現手順 |
 | 7240fed (PR #5) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
 
@@ -530,7 +531,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 
 **Dynamic Island 版** (ユーザーの予定): 今の版と並行して配布する。テスト版 (debug) まで作成済み (6.12)。残り:
 - 実機での確認 (カメラ穴の位置・ぽよん・ポップアップ・電池)。ユーザーの確認後に公開版を出す。
-- 公開版: Release ワークフローで `assembleIslandRelease` も作り、`LiquidLauncherIsland-<版>.apk` を同じタグで公開する (今は標準版だけ)。
+- 公開版: v1.1.0 から Release ワークフローが `LiquidLauncherIsland-<版>.apk` を標準版と同じタグで公開する (ユーザーの実機確認後)。
   パッケージ名は `com.aa.launcher.island` (標準版と並べて入れられる。配置や設定は別なので、移るときはバックアップ/復元を使う)。
 
 優先度高:
