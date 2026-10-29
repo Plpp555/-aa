@@ -10,5 +10,5 @@
 - 描画品質・アニメーション・操作感・既存機能を犠牲にする軽量化は禁止。静止中・非表示中は処理を止め、操作中は最高リフレッシュレート。
 - Android 6.0 (minSdk 23) 以降に対応。minSdk より新しい API は `Build.VERSION.SDK_INT` で分岐する (CI の lint `NewApi` で検査、エミュレータは API 34 と 23)。
 - ローカルで AGP ビルドができない環境が多いので、push して GitHub Actions (Android CI / Emulator smoke test) で検証する。
-- 公開リポジトリ (MIT)。`main` が公開版で、作業はブランチ → Pull Request。公開版の APK は `v*.*.*` のタグで Release ワークフローが非公開の鍵で署名して Releases に置く (CHANGELOG.md を更新してからタグ)。
+- 公開リポジトリ (MIT)。`main` が公開版で、作業はブランチ → Pull Request。公開版の APK は Release ワークフロー (手動実行でバージョン指定、またはタグ `v*.*.*`) が非公開の鍵で署名して Releases に置く。**公開はユーザーが「公開して良いです」と言ったときだけ** (手順は DEVELOPMENT_NOTES.md 12 章)。
 - 変更したら `DEVELOPMENT_NOTES.md` の修正履歴・既知の不具合・今後の予定を更新する。
