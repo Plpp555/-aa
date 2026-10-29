@@ -3,7 +3,7 @@
 Issue や Pull Request を歓迎します。
 
 ## 不具合の報告・要望
-[Issues](https://github.com/Plpp555/-aa/issues) のテンプレートに沿って書いてください。
+[Issues](https://github.com/Plpp555/liquid-OS-Android-launcher/issues) のテンプレートに沿って書いてください。
 不具合の場合は、端末名・Android のバージョン・Liquid Launcher のバージョン (設定アプリの一番下) と、再現手順やスクリーンショットがあると助かります。
 
 ## Pull Request

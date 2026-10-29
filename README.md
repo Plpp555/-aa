@@ -1,6 +1,6 @@
 # Liquid Launcher — iOS 27 スタイルの Android ランチャー
 
-[![Release](https://img.shields.io/github/v/release/Plpp555/-aa?label=release)](https://github.com/Plpp555/-aa/releases/latest)
+[![Release](https://img.shields.io/github/v/release/Plpp555/liquid-OS-Android-launcher?label=release)](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
 
@@ -14,7 +14,7 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 
 ## ダウンロードとインストール
 
-1. [Releases](https://github.com/Plpp555/-aa/releases/latest) から `LiquidLauncher-<バージョン>.apk` をダウンロード
+1. [Releases](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest) から `LiquidLauncher-<バージョン>.apk` をダウンロード
 2. 端末で開いてインストール (「提供元不明のアプリ」の許可を求められたら、使っているブラウザやファイルアプリに許可)
 3. ホームボタンを押して「Liquid Launcher」を選ぶ (または初回の案内から「デフォルトのホームアプリに設定」)
 
@@ -191,7 +191,7 @@ app/src/main/java/com/aa/launcher/
 
 ## 開発への参加
 
-不具合の報告や要望は [Issues](https://github.com/Plpp555/-aa/issues) へどうぞ。Pull Request も歓迎します。
+不具合の報告や要望は [Issues](https://github.com/Plpp555/liquid-OS-Android-launcher/issues) へどうぞ。Pull Request も歓迎します。
 進め方は [CONTRIBUTING.md](CONTRIBUTING.md)、変更履歴は [CHANGELOG.md](CHANGELOG.md)、
 設計と開発の記録は [DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md) を参照してください。
 
@@ -205,7 +205,7 @@ app/src/main/java/com/aa/launcher/
 written in Kotlin and Jetpack Compose. It supports phones, tablets and foldables (two-page spreads on the unfolded screen)
 running Android 6.0 or later. The UI is available in English and Japanese.
 
-- **Download**: get `LiquidLauncher-<version>.apk` from [Releases](https://github.com/Plpp555/-aa/releases/latest),
+- **Download**: get `LiquidLauncher-<version>.apk` from [Releases](https://github.com/Plpp555/liquid-OS-Android-launcher/releases/latest),
   install it, then choose Liquid Launcher as your home app. New versions install over the old one.
 - **Authenticity**: every release is signed with the same private key; its certificate SHA-256 is
   `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE`.
