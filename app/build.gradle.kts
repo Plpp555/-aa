@@ -15,22 +15,41 @@ android {
         applicationId = "com.aa.launcher"
         minSdk = 23
         targetSdk = 36
-        // CI では実行番号を使い、ビルドのたびに新しい版として上書き更新できるようにする (ローカルビルドは 1)
+        // 公開版 (GitHub Releases) はタグの版番号 (v1.2.3 → 1.2.3、versionCode 10203)。
+        // それ以外の CI ビルドは実行番号を使い、ビルドのたびに新しい版として上書き更新できるようにする (ローカルビルドは 1)
+        val releaseVersion = System.getenv("RELEASE_VERSION")?.takeIf { Regex("""\d+\.\d+\.\d+""").matches(it) }
         val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
-        versionCode = runNumber ?: 1
-        versionName = "1.0." + (runNumber ?: 0)
+        if (releaseVersion != null) {
+            val (major, minor, patch) = releaseVersion.split(".").map { it.toInt() }
+            versionCode = major * 10000 + minor * 100 + patch
+            versionName = releaseVersion
+        } else {
+            versionCode = runNumber ?: 1
+            versionName = "1.0." + (runNumber ?: 0)
+        }
     }
 
     signingConfigs {
-        // debug / release とも、リポジトリに置いた同じ鍵で署名する。
+        // 開発用: debug (と、公開用の鍵がないときの release) をリポジトリに置いた同じ鍵で署名する。
         // CI の既定の debug 鍵は実行ごとに作り直されるため、署名が毎回変わって上書き更新できなかった。
-        // 鍵は公開リポジトリにあるので誰でも同じ署名を作れる。ストア配布時は非公開の鍵に置き換えること。
+        // この鍵は公開されているので、公開版の署名には使わない (下の "release")。
         create("shared") {
             storeFile = file("signing/liquid-launcher.p12")
             storeType = "pkcs12"
             storePassword = "liquidlauncher"
             keyAlias = "liquid"
             keyPassword = "liquidlauncher"
+        }
+        // 公開版 (GitHub Releases): 非公開の鍵。リリース用ワークフローが GitHub Secrets から環境変数で渡す
+        val releaseStore = System.getenv("RELEASE_KEYSTORE_PATH")?.let { file(it) }?.takeIf { it.exists() }
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = releaseStore
+                storeType = "pkcs12"
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
         }
     }
 
@@ -47,7 +66,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("shared")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("shared")
         }
     }
 

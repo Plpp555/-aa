@@ -17,7 +17,7 @@
      **品質・アニメーション・操作感・既存機能を犠牲にする軽量化は禁止。**
 - **アプリ名**: Liquid Launcher (設定アプリ側の表示名: Launcher Settings / ランチャー設定)
 - **パッケージ**: `com.aa.launcher` (debug ビルドは `com.aa.launcher.debug`)
-- **リポジトリ**: `Plpp555/-aa`、作業ブランチ `claude/android-launcher-ios27-91mgc6`、PR #1 (オープン中)
+- **リポジトリ**: `Plpp555/-aa` (公開、MIT License)。`main` が公開版。作業は `main` から作ったブランチで行い、Pull Request で `main` に入れる (PR #1 で初版を main にマージ)
 - **言語**: UI は英語 (既定) と日本語。コードのコメントは日本語。ユーザーとのやり取りも日本語。
 
 ## 2. 開発方針 (必ず守ること)
@@ -46,7 +46,8 @@
 ### 3.2 CI (GitHub Actions)
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、APK を Artifact `liquid-launcher-apk` にアップロード、その後 `lintDebug` (NewApi のみ) |
+| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、テスト版 (debug) を Artifact `liquid-launcher-test-build` にアップロード、その後 `lintDebug` (NewApi のみ) |
+| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
 | `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
 
 - 実行状況は `curl -s https://api.github.com/repos/Plpp555/-aa/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
@@ -85,10 +86,15 @@
 - compileSdk 36 / targetSdk 36 / **minSdk 23 (Android 6.0)**、JDK 17。androidx.exifinterface 1.3.7 (Android 8.1 以前の写真の向き)
 - lint は `NewApi` だけを検査し、エラーでビルド失敗 (`lint { checkOnly += "NewApi" }`)。minSdk より新しい API は必ず `Build.VERSION.SDK_INT` で分岐するか `@RequiresApi` を付ける
 - release ビルドは R8 (minify + shrinkResources)。
-- **署名**: debug / release とも `app/signing/liquid-launcher.p12` (パスワード `liquidlauncher`、別名 `liquid`) で署名する (`signingConfigs.shared`)。
-  CI の既定の debug 鍵は実行ごとに作り直されるので、以前は署名が毎回変わり、上書き更新できなかった (「パッケージが競合」)。
-  鍵は公開リポジトリにあるため誰でも同じ署名を作れる。ストア配布時は非公開の鍵に置き換えること。
-- **versionCode** = `GITHUB_RUN_NUMBER` (ローカルビルドは 1)、versionName = `1.0.<実行番号>`。CI のビルドは常に新しい版として更新できる
+- **署名**:
+  - 公開版 (GitHub Releases): 非公開の鍵 (`signingConfigs.release`)。GitHub Secrets の `RELEASE_KEYSTORE_BASE64` (PKCS12 を base64)・
+    `RELEASE_KEYSTORE_PASSWORD`・`RELEASE_KEY_ALIAS` (`liquid-release`)・`RELEASE_KEY_PASSWORD` を release.yml が環境変数
+    (`RELEASE_KEYSTORE_PATH` ほか) で渡す。証明書の SHA-256 は `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE` (README・SECURITY.md に掲載)。
+    **鍵をなくすと上書き更新できなくなる**ので、持ち主が安全な場所に保管している (リポジトリには入れない)。
+  - 開発用: `app/signing/liquid-launcher.p12` (パスワード `liquidlauncher`、別名 `liquid`、`signingConfigs.shared`)。debug と、公開用の鍵がないときの release。
+    公開されているので公開版には使わない。CI の既定の debug 鍵は実行ごとに作り直されるため、以前は署名が毎回変わり上書き更新できなかった。
+- **版番号**: 公開版はタグから (`RELEASE_VERSION`、v1.2.3 → versionName 1.2.3・versionCode 10203)。それ以外の CI ビルドは
+  versionCode = `GITHUB_RUN_NUMBER`、versionName = `1.0.<実行番号>` (ローカルは 1)
 - `app/src/main/baseline-prof.txt`: 自アプリのコードをインストール時に事前コンパイル (profileinstaller は Compose の依存で入る)
 
 ## 5. ディレクトリ構成とファイルの役割
@@ -410,6 +416,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | e1d4380 | **折りたたみは見開き表示に変更** (今日の表示 → 1+2 → 3+4 → … → App ライブラリ、奇数なら右は空のページ)。ドックは中央に戻す |
 | df3cc8a | 実機フィードバック対応の検証結果を記録 |
 | f753a63 | **折りたたみの開閉で壁紙の大きさが変わり Liquid Glass の透かしがずれる問題を修正** (画面に合わせて作り直す・透かしを中央切り抜きで描く)、**写真壁紙の位置と拡大率を決める編集画面** |
+| 3c3e520 | f753a63 の検証結果を記録 |
+| (次のコミット) | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。
@@ -430,7 +438,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 - API 34 エミュレータ: smoke / smoke2 とも従来どおり成功 (フォルダ作成・長押し後ドラッグ含む)。
 
 ### dd32fda の検証結果 (2026-10-24)
-- Android CI 成功 (APK は Artifact `liquid-launcher-apk`)。
+- Android CI 成功 (APK は当時の Artifact `liquid-launcher-apk`)。
 - Emulator smoke test: smoke2 で `HOLD_DRAG 16b_hold_then_drag: drag started` (1.2 秒押してメニューが出た後に動かしてドラッグ開始)、
   draganddrop でのフォルダ作成 (Entertainment)・並べ替え・ウィジェット追加・クリア/ダーク・日本語もすべて成功。smoke.sh も成功 (Spotlight・コントロールセンターの縦スワイプ含む)。
   クラッシュバッファは SystemUI (Pixel Launcher 無効化の副作用) のみ。
@@ -450,6 +458,11 @@ docs/screenshots.jpg  README 用スクリーンショット
 
 ## 11. 今後の開発予定 (候補)
 
+**Dynamic Island 版** (ユーザーの予定): 今の版と並行して配布する想定。進め方の案:
+- Gradle の product flavor (`standard` / `island`) で 1 つのコードから 2 つの APK を作る。island は `applicationIdSuffix = ".island"` で今の版と並べて入れられるようにするか、
+  同じパッケージで置き換えるかを決める。リリースは `LiquidLauncher-<版>.apk` と `LiquidLauncherIsland-<版>.apk` を同じタグで公開する。
+- 機能の差分は flavor ごとのソースセット (`src/island/`) か、`BuildConfig` のフラグで切り替える。
+
 優先度高:
 - 実機での検証 (リフレッシュレート切替、通知バッジ、メディア、AppWidget、生体認証)。
 - カレンダーウィジェットの予定表示 (READ_CALENDAR、任意権限)。
@@ -468,6 +481,11 @@ docs/screenshots.jpg  README 用スクリーンショット
 - 他言語対応。
 
 ## 12. よくある作業の手順
+
+- **リリース (公開版を出す)**:
+  1. `CHANGELOG.md` の先頭に `## [1.2.3] - YYYY-MM-DD` の節を書き、`main` に入れる
+  2. `main` の最新にタグを付けて push: `git tag v1.2.3 && git push origin v1.2.3` (GitHub の Releases 画面の「Draft a new release」でタグを新規作成しても同じ)
+  3. Release ワークフローが APK を付けたリリースを作る。版番号はタグから付くので、前の版より大きい番号にする
 
 - **設定項目を追加**: `LauncherSettings` にデフォルト値付きで追加 → `SettingsScreens.kt` の該当画面に行を追加 → 文字列を英日に追加 → `tools/check_strings.py`。
 - **内蔵ウィジェットを追加**: `WidgetKind` に追加 (ラベル/説明の文字列) → `ui/today/Widgets.kt` の `WidgetContent` に分岐と実装。

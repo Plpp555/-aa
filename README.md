@@ -1,9 +1,42 @@
 # Liquid Launcher — iOS 27 スタイルの Android ランチャー
 
+[![Release](https://img.shields.io/github/v/release/Plpp555/-aa?label=release)](https://github.com/Plpp555/-aa/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Android 6.0+](https://img.shields.io/badge/Android-6.0%2B-3DDC84)
+
 iOS 27 のホーム画面 (Liquid Glass デザイン) を基準にした Android 向けホームアプリです。
 Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能と、それを調整するための設定をひと通り備えています。
+スマホ・タブレット・折りたたみスマホ (開いた画面は見開き表示) に対応しています。
 
-> Apple Inc. とは関係のない個人プロジェクトです。
+> Apple Inc. とは関係のない個人プロジェクトです。iOS、Liquid Glass などは Apple Inc. の商標です。
+
+*English summary is at the [bottom of this page](#english).*
+
+## ダウンロードとインストール
+
+1. [Releases](https://github.com/Plpp555/-aa/releases/latest) から `LiquidLauncher-<バージョン>.apk` をダウンロード
+2. 端末で開いてインストール (「提供元不明のアプリ」の許可を求められたら、使っているブラウザやファイルアプリに許可)
+3. ホームボタンを押して「Liquid Launcher」を選ぶ (または初回の案内から「デフォルトのホームアプリに設定」)
+
+- **動作環境**: Android 6.0 以降。古い Android では一部の機能が使えません ([制限事項](#制限事項))
+- **更新**: 新しいバージョンの APK をそのまま上書きインストールできます。配置や設定は残ります
+- **本物の確認**: 公開版はすべて同じ非公開の鍵で署名しています。署名証明書の SHA-256 は
+  `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE` です
+  (各リリースのページにも APK の SHA-256 と一緒に載せています)。ここ以外で配られている APK は入れないでください
+- 開発途中のテスト版 (debug ビルド、パッケージ名 `com.aa.launcher.debug`) は Actions の Artifacts にありますが、通常は Releases の版を使ってください
+
+### プライバシー
+
+インターネットへのアクセス権限を持たず、データの収集や送信は一切行いません。設定・配置・壁紙は端末内にだけ保存されます。
+次の権限・機能は、使う場合だけ許可を求めます:
+
+| 許可 | 使う機能 |
+| --- | --- |
+| 通知へのアクセス | 通知バッジ、コントロールセンターの再生中のメディア |
+| ユーザー補助 (Liquid Launcher ジェスチャー) | ジェスチャーからの画面ロック・最近使ったアプリ・通知センター |
+| システム設定の変更 | コントロールセンターの明るさ・画面の向きのロック |
+| おやすみモードへのアクセス | コントロールセンターのおやすみモード |
+| 連絡先 | Spotlight での連絡先検索 |
 
 ![スクリーンショット](docs/screenshots.jpg)
 
@@ -103,23 +136,23 @@ Kotlin + Jetpack Compose で書かれており、ホーム画面の主要機能�
 ./gradlew assembleRelease    # app/build/outputs/apk/release/
 ```
 
-GitHub Actions (`.github/workflows/android.yml`) が push のたびに debug / release の APK をビルドし、
-Artifacts (`liquid-launcher-apk`) としてアップロードします。
+GitHub Actions:
+- `.github/workflows/android.yml`: push のたびにビルドし、テスト版 (debug) を Artifacts (`liquid-launcher-test-build`) に置きます
+- `.github/workflows/release.yml`: `v1.2.3` の形のタグを push すると、非公開の鍵で署名した APK を付けて Releases に公開します
 
 また `.github/workflows/emulator-smoke.yml` (Pull Request 時と手動実行時) では、Android エミュレータ (API 34 と、Android 6.0 の API 23) 上で実際にランチャーを起動し、
 初回案内 → ホーム画面 → 今日の表示 → App ライブラリ → Spotlight → 長押しメニュー → 編集モード → コントロールセンター →
 設定画面、さらにドラッグでのフォルダ作成・ウィジェット追加・ダークモード・壁紙変更・日本語表示までを操作して、
 画面のテキストとクラッシュログを出力します (`.github/scripts/smoke*.sh`)。
 
-- debug ビルドのパッケージ名は `com.aa.launcher.debug` なので、release 版と並べてインストールできます
-- debug / release とも、リポジトリ内の固定の鍵 (`app/signing/`) で署名しているので、新しいビルドをそのまま上書き更新できます。
-  鍵は公開されているため、配布する場合は独自の署名設定に置き換えてください
-- 2026-10-24 以前のビルド (CI が毎回作る鍵で署名) を入れている場合は、一度アンインストールしてから入れ直してください
-  (設定 →「バックアップとリセット」で書き出しておけば復元できます)
+- debug ビルドのパッケージ名は `com.aa.launcher.debug` なので、公開版と並べてインストールできます
+- debug ビルド (と、公開用の鍵がないときの release ビルド) は、リポジトリ内の開発用の鍵 (`app/signing/`) で署名します。
+  この鍵は公開されているので、公開版の署名には使いません
+- 公開版の鍵は GitHub Secrets (`RELEASE_KEYSTORE_BASE64` / `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD`) にだけあります
 
 ## 使い方
 
-1. APK をインストールして、ホームボタンを押したときに「Liquid Launcher」を選ぶ (または初回の案内から「デフォルトのホームアプリに設定」)
+1. インストールして、ホームボタンを押したときに「Liquid Launcher」を選ぶ (または初回の案内から「デフォルトのホームアプリに設定」)
 2. 通知バッジとコントロールセンターのメディア操作を使う場合は、通知へのアクセスを許可
 3. 画面ロック/最近使ったアプリのジェスチャーを使う場合は、ユーザー補助で「Liquid Launcher ジェスチャー」をオン
 4. 明るさ・画面の向きのロックは「システム設定の変更」、おやすみモードは「おやすみモードへのアクセス」の許可が必要です
@@ -154,3 +187,27 @@ app/src/main/java/com/aa/launcher/
 - 古い Android では一部の機能が使えません: App ショートカット (7.1 以降)、ジェスチャーからの画面ロック (9 以降)、
   ホーム画面とロック画面への別々の壁紙設定 (7.0 以降)、メニュー表示中の背後のぼかし (12 以降)。
   Android 8.0 未満ではアダプティブアイコンがないため、アイコンは従来形式のものとして描画します
+
+## 開発への参加
+
+不具合の報告や要望は [Issues](https://github.com/Plpp555/-aa/issues) へどうぞ。Pull Request も歓迎します。
+進め方は [CONTRIBUTING.md](CONTRIBUTING.md)、変更履歴は [CHANGELOG.md](CHANGELOG.md)、
+設計と開発の記録は [DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md) を参照してください。
+
+## ライセンス
+
+[MIT License](LICENSE)。Apple Inc. とは関係がなく、Apple Inc. の承認や支援を受けたものではありません。
+
+## English
+
+**Liquid Launcher** is an Android home screen app modeled on the iOS 27 home screen with its Liquid Glass design,
+written in Kotlin and Jetpack Compose. It supports phones, tablets and foldables (two-page spreads on the unfolded screen)
+running Android 6.0 or later. The UI is available in English and Japanese.
+
+- **Download**: get `LiquidLauncher-<version>.apk` from [Releases](https://github.com/Plpp555/-aa/releases/latest),
+  install it, then choose Liquid Launcher as your home app. New versions install over the old one.
+- **Authenticity**: every release is signed with the same private key; its certificate SHA-256 is
+  `F5:CA:2C:CB:24:27:10:2C:9E:9D:E5:23:D3:8B:18:A5:E7:51:9D:84:49:AD:5D:A7:20:60:86:F8:A5:75:C6:FE`.
+- **Privacy**: no internet permission and no data collection. Optional permissions (notification access,
+  accessibility, write settings, Do Not Disturb access, contacts) are requested only for the features that need them.
+- **License**: MIT. This is an independent project, not affiliated with or endorsed by Apple Inc.

@@ -27,11 +27,13 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug assembleRelease
 
-      - name: Upload APKs
+      # テスト用の debug ビルドだけを置く (パッケージ名 com.aa.launcher.debug、開発用の鍵)。
+      # 公開版は Release ワークフローが非公開の鍵で署名して GitHub Releases に置く
+      - name: Upload test build
         uses: actions/upload-artifact@v4
         with:
-          name: liquid-launcher-apk
-          path: app/build/outputs/apk/**/*.apk
+          name: liquid-launcher-test-build
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       # APK のアップロード後に実行 (失敗してもジョブは赤になるが APK は取得できる)。
