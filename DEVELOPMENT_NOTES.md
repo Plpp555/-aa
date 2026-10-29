@@ -17,7 +17,7 @@
      **品質・アニメーション・操作感・既存機能を犠牲にする軽量化は禁止。**
 - **アプリ名**: Liquid Launcher (設定アプリ側の表示名: Launcher Settings / ランチャー設定)
 - **パッケージ**: `com.aa.launcher` (debug ビルドは `com.aa.launcher.debug`)
-- **リポジトリ**: `Plpp555/-aa` (公開、MIT License)。`main` が公開版。作業は `main` から作ったブランチで行い、Pull Request で `main` に入れる (PR #1 で初版を main にマージ)
+- **リポジトリ**: `Plpp555/liquid-OS-Android-launcher` (公開、MIT License。2026-10-29 に `Plpp555/-aa` から名前を変更、古い URL は GitHub が転送する)。`main` が公開版。作業は `main` から作ったブランチで行い、Pull Request で `main` に入れる (PR #1 で初版を main にマージ)
 - **言語**: UI は英語 (既定) と日本語。コードのコメントは日本語。ユーザーとのやり取りも日本語。
 
 ## 2. 開発方針 (必ず守ること)
@@ -46,11 +46,12 @@
 ### 3.2 CI (GitHub Actions)
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、テスト版 (debug) を Artifact `liquid-launcher-test-build` にアップロード、その後 `lintDebug` (NewApi のみ) |
+| `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleRelease` と `lintDebug` (NewApi のみ) で確認するだけ (APK は置かない) |
+| `.github/workflows/android-debug.yml` (Android CI (debug)) | すべての push / PR / 手動 | テスト版 `assembleDebug` を Artifact `liquid-launcher-test-build` にアップロード (com.aa.launcher.debug、開発用の鍵) |
 | `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
 | `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
 
-- 実行状況は `curl -s https://api.github.com/repos/Plpp555/-aa/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
+- 実行状況は `curl -s https://api.github.com/repos/Plpp555/liquid-OS-Android-launcher/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
 - 待機は `until ...; do sleep 30; done` を `run_in_background` で実行するのが良い (フォアグラウンドの sleep は不可)。
 - ジョブログは GitHub MCP の `get_job_logs(job_id, return_content=true, tail_lines=3000)` で取得。
   大きいログは自動的にファイルへ保存されるので、`python3 tools/extract_smoke_log.py <ファイル> <出力dir>` で
@@ -419,7 +420,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | 3c3e520 | f753a63 の検証結果を記録 |
 | dcd3249 / ea58297 | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
 | 667fce6 / c4e2269 | Release ワークフローを手動実行 (バージョン指定、タグは自動作成) に対応。ユーザーが「公開して良いです」と言ったら Claude が実行する |
-| v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/-aa/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
+| v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
+| (次のコミット) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。

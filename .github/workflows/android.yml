@@ -22,21 +22,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug & release APK
+      # ビルドと lint の確認だけを行う (APK は置かない)。
+      # テスト版 (debug) は「Android CI (debug)」(android-debug.yml)、公開版は Release ワークフローが置く
+      - name: Build release APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug assembleRelease
+          ./gradlew --no-daemon assembleRelease
 
-      # テスト用の debug ビルドだけを置く (パッケージ名 com.aa.launcher.debug、開発用の鍵)。
-      # 公開版は Release ワークフローが非公開の鍵で署名して GitHub Releases に置く
-      - name: Upload test build
-        uses: actions/upload-artifact@v4
-        with:
-          name: liquid-launcher-test-build
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      # APK のアップロード後に実行 (失敗してもジョブは赤になるが APK は取得できる)。
       # minSdk (Android 6.0) より新しい API を分岐なしで呼んでいないか (NewApi) を確認する
       - name: Lint (NewApi)
         run: ./gradlew --no-daemon lintDebug || { cat app/build/reports/lint-results-debug.txt; exit 1; }
