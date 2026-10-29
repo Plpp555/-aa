@@ -1,10 +1,17 @@
 name: Release
 
-# タグ (v1.2.3 の形) を push すると、非公開の鍵で署名した APK を付けて GitHub Releases に公開する。
-# 手順は DEVELOPMENT_NOTES.md の「リリース手順」を参照。
+# 非公開の鍵で署名した APK を付けて GitHub Releases に公開する。次のどちらかで動く:
+# - タグ (v1.2.3 の形) を push する
+# - Actions の画面 (または API) から手動で実行し、バージョン (1.2.3) を指定する。タグは main の最新に自動で作る
+# 手順は DEVELOPMENT_NOTES.md の「リリース」を参照。
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "公開するバージョン (例: 1.0.0)。CHANGELOG.md に同じバージョンの節が必要"
+        required: true
 
 permissions:
   contents: write
@@ -15,6 +22,32 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+
+      - name: Decide version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::バージョンは 1.2.3 の形で指定してください (指定: $VERSION)"
+            exit 1
+          fi
+          # 手動実行のときは、同じバージョンがすでに公開されていたら止める (上書きしない)
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            echo "::error::タグ v$VERSION はすでにあります。新しいバージョンを指定してください"
+            exit 1
+          fi
+          # CHANGELOG.md に節がなければ止める (リリースの本文になる)
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md に「## [$VERSION]」の節がありません"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
 
       - name: Check signing secrets
         env:
@@ -46,14 +79,13 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
           export RELEASE_KEYSTORE_PATH="$RUNNER_TEMP/release.p12"
-          export RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          export RELEASE_VERSION="$VERSION"
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
           rm -f "$RUNNER_TEMP/release.p12"
 
       - name: Verify signature and prepare files
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           APK="LiquidLauncher-$VERSION.apk"
           cp app/build/outputs/apk/release/app-release.apk "$APK"
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
@@ -69,7 +101,6 @@ jobs:
 
       - name: Release notes
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           # CHANGELOG.md の該当バージョンの節を本文にする
           awk -v v="$VERSION" '
             /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, " " v)) { found=1; next } }
@@ -89,7 +120,9 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          name: Liquid Launcher ${{ github.ref_name }}
+          name: Liquid Launcher ${{ env.TAG }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           body_path: notes.md
           files: |
             ${{ env.APK }}

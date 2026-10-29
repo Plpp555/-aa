@@ -47,7 +47,7 @@
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
 | `.github/workflows/android.yml` (Android CI) | すべての push / PR / 手動 | `assembleDebug assembleRelease`、テスト版 (debug) を Artifact `liquid-launcher-test-build` にアップロード、その後 `lintDebug` (NewApi のみ) |
-| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
+| `.github/workflows/release.yml` (Release) | `v*.*.*` のタグの push、または手動実行 (バージョンを指定。タグは自動で作る) | 非公開の鍵で署名した release APK を `LiquidLauncher-<版>.apk` として GitHub Releases に公開 (本文は CHANGELOG.md の該当節 + SHA-256 + 署名証明書)。Secrets がない・開発用の鍵で署名されていたら失敗する |
 | `.github/workflows/emulator-smoke.yml` (Emulator smoke test) | PR / 手動 | API 34 エミュレータ (pixel_6, 1080x2400) で `smoke.sh` と `smoke2.sh`、API 23 (Android 6.0) で `smoke_legacy.sh` を別ジョブで実行 |
 
 - 実行状況は `curl -s https://api.github.com/repos/Plpp555/-aa/actions/runs?branch=<ブランチ>` で取得できる (公開リポジトリなので認証不要)。
@@ -417,7 +417,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | df3cc8a | 実機フィードバック対応の検証結果を記録 |
 | f753a63 | **折りたたみの開閉で壁紙の大きさが変わり Liquid Glass の透かしがずれる問題を修正** (画面に合わせて作り直す・透かしを中央切り抜きで描く)、**写真壁紙の位置と拡大率を決める編集画面** |
 | 3c3e520 | f753a63 の検証結果を記録 |
-| (次のコミット) | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
+| dcd3249 / ea58297 | **GitHub での公開配布の整備**: MIT License、Release ワークフロー (タグで非公開鍵署名の APK を公開)、公開版の署名と版番号、CI の成果物はテスト版のみ、README (ダウンロード・プライバシー・英語)、CHANGELOG・CONTRIBUTING・SECURITY、Issue/PR テンプレート |
+| (次のコミット) | Release ワークフローを手動実行 (バージョン指定、タグは自動作成) に対応。ユーザーが「公開して良いです」と言ったら Claude が実行する |
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。
@@ -482,10 +483,12 @@ docs/screenshots.jpg  README 用スクリーンショット
 
 ## 12. よくある作業の手順
 
-- **リリース (公開版を出す)**:
-  1. `CHANGELOG.md` の先頭に `## [1.2.3] - YYYY-MM-DD` の節を書き、`main` に入れる
-  2. `main` の最新にタグを付けて push: `git tag v1.2.3 && git push origin v1.2.3` (GitHub の Releases 画面の「Draft a new release」でタグを新規作成しても同じ)
-  3. Release ワークフローが APK を付けたリリースを作る。版番号はタグから付くので、前の版より大きい番号にする
+- **リリース (公開版を出す)**: **ユーザーが会話で「公開して良いです」と言ったときだけ行う** (勝手に公開しない)。
+  1. `CHANGELOG.md` の先頭に `## [1.2.3] - YYYY-MM-DD` の節があることを確認し (日付は公開する日)、なければ書いて `main` に入れる
+  2. Release ワークフローを手動実行する: GitHub MCP の `actions_run_trigger` (method `run_workflow`、workflow_id `release.yml`、ref `main`、
+     inputs `{"version": "1.2.3"}`)。Actions の画面の「Run workflow」や、タグの push (`v1.2.3`) でも同じ
+  3. ワークフローが main の最新に `v1.2.3` のタグを作り、APK を付けたリリースを公開する。版番号は前の版より大きくする
+     (同じタグがある・CHANGELOG に節がない・Secrets がない場合は止まる)。結果 (リリースのページ・APK) を確認してユーザーに報告する
 
 - **設定項目を追加**: `LauncherSettings` にデフォルト値付きで追加 → `SettingsScreens.kt` の該当画面に行を追加 → 文字列を英日に追加 → `tools/check_strings.py`。
 - **内蔵ウィジェットを追加**: `WidgetKind` に追加 (ラベル/説明の文字列) → `ui/today/Widgets.kt` の `WidgetContent` に分岐と実装。
