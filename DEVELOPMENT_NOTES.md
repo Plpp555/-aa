@@ -471,7 +471,8 @@ docs/screenshots.jpg  README 用スクリーンショット
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
 | 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 | fca4683 (PR #5) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
-| (次のコミット) | Release ワークフローで Dynamic Island 版も公開 (`LiquidLauncherIsland-<版>.apk`)、CHANGELOG に 1.1.0、README |
+| v1.1.0 | **Dynamic Island 版を含む公開版** (2026-10-29、ユーザーの実機確認後に Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.1.0 、`LiquidLauncher-1.1.0.apk` (SHA-256 `3d97e222…6e20`)、`LiquidLauncherIsland-1.1.0.apk` (`735b5aba…b0b8`)、どちらも非公開の鍵 (`f5ca2ccb…c6fe`) |
+| 4a76103 (PR #5) | Release ワークフローで Dynamic Island 版も公開 (`LiquidLauncherIsland-<版>.apk`)、CHANGELOG に 1.1.0、README |
 | 5b1031d (PR #5) | **実機で再生中の音楽が島に出ない問題を修正**: すべてのセッションの状態変化を受け取って選び直す、通知アクセスがあれば起動時から監視 (リスナーが切れていたら再接続を頼む)、曲の情報がなくても再生中なら表示。Island 版の通知アクセス・ユーザー補助の一覧の名前を標準版と区別。スモークテストに再現手順 |
 | 7240fed (PR #5) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
 
