@@ -9,6 +9,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.aa.launcher.service.BadgeNotificationListener
@@ -22,9 +23,11 @@ data class NowPlaying(
     val art: ImageBitmap?,
     val isPlaying: Boolean,
     val packageName: String,
+    /** 曲の長さ (ミリ秒)。不明なら 0。 */
+    val durationMs: Long = 0L,
 )
 
-/** コントロールセンターの「再生中」タイル用。通知アクセスが必要。 */
+/** コントロールセンターの「再生中」タイルと Dynamic Island 用。通知アクセスが必要。 */
 class MediaRepository(private val context: Context) {
 
     private val sessionManager = context.getSystemService(MediaSessionManager::class.java)
@@ -86,7 +89,18 @@ class MediaRepository(private val context: Context) {
             art = art?.asImageBitmap(),
             isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING,
             packageName = c.packageName,
+            durationMs = meta.getLong(MediaMetadata.METADATA_KEY_DURATION).coerceAtLeast(0L),
         )
+    }
+
+    /** 今の再生位置 (ミリ秒)。再生中は最後に位置が更新されてからの経過時間を足す。 */
+    fun positionMs(): Long {
+        val state = controller?.playbackState ?: return 0L
+        var position = state.position
+        if (state.state == PlaybackState.STATE_PLAYING && state.lastPositionUpdateTime > 0L) {
+            position += ((SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
+        }
+        return position.coerceAtLeast(0L)
     }
 
     fun playPause() {

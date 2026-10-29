@@ -322,10 +322,10 @@ private fun MonthGrid(now: Long, modifier: Modifier) {
     }
 }
 
-private data class BatteryInfo(val level: Int, val charging: Boolean)
+internal data class BatteryInfo(val level: Int, val charging: Boolean)
 
 @Composable
-private fun rememberBattery(): BatteryInfo {
+internal fun rememberBattery(): BatteryInfo {
     val context = LocalContext.current
     var info by remember { mutableStateOf(BatteryInfo(100, false)) }
     val active = LocalContentActive.current

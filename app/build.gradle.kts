@@ -53,6 +53,23 @@ android {
         }
     }
 
+    // 標準版と Dynamic Island 版を 1 つのコードから作る (島の有無は BuildConfig.DYNAMIC_ISLAND で切り替える)
+    flavorDimensions += "edition"
+    productFlavors {
+        create("standard") {
+            dimension = "edition"
+            isDefault = true
+            buildConfigField("boolean", "DYNAMIC_ISLAND", "false")
+        }
+        // 標準版と並べてインストールできるよう、パッケージ名を分ける (com.aa.launcher.island)
+        create("island") {
+            dimension = "edition"
+            applicationIdSuffix = ".island"
+            versionNameSuffix = "-island"
+            buildConfigField("boolean", "DYNAMIC_ISLAND", "true")
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"

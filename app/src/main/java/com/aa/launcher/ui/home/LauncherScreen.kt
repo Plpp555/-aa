@@ -99,6 +99,7 @@ import com.aa.launcher.ui.glass.LocalGlassParams
 import com.aa.launcher.ui.glass.LocalScreenSize
 import com.aa.launcher.ui.glass.blurCompat
 import com.aa.launcher.ui.glass.liquidGlass
+import com.aa.launcher.ui.island.DynamicIsland
 import com.aa.launcher.ui.library.AppLibraryPage
 import com.aa.launcher.ui.onboarding.OnboardingOverlay
 import com.aa.launcher.ui.spotlight.SpotlightOverlay
@@ -160,6 +161,8 @@ fun LauncherScreen(vm: LauncherViewModel) {
                     layout?.let { HomeContent(vm, it, settings) }
                 }
                 Overlays(vm, settings)
+                // Island 版だけ (標準版では何もしない)
+                DynamicIsland(haptics = settings.haptics, reduceMotion = settings.reduceMotion)
                 DragLayer(vm)
             }
         }

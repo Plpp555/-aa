@@ -372,4 +372,10 @@
     <string name="sys_accessibility">ユーザー補助 (システム)</string>
     <string name="sys_about">端末情報</string>
     <string name="sys_settings">システム設定</string>
+    <!-- Dynamic Island (Island 版) -->
+    <string name="island_play">再生</string>
+    <string name="island_pause">一時停止</string>
+    <string name="island_next">次の曲</string>
+    <string name="island_previous">前の曲</string>
+    <string name="island_unknown_title">不明なタイトル</string>
 </resources>

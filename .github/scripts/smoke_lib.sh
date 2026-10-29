@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # スモークテスト用の共通関数。
-PKG=com.aa.launcher.debug
+# FLAVOR=island で Dynamic Island 版 (com.aa.launcher.island.debug) を試す。既定は標準版
+FLAVOR=${FLAVOR:-standard}
+if [ "$FLAVOR" = island ]; then PKG=com.aa.launcher.island.debug; else PKG=com.aa.launcher.debug; fi
+APK=app/build/outputs/apk/$FLAVOR/debug/app-$FLAVOR-debug.apk
 OUT=/tmp/smoke
 mkdir -p "$OUT"
 
@@ -83,6 +86,17 @@ long_press_text() {
   [ -n "$xy" ] && adb shell input swipe $xy $xy 900
 }
 
+# 画面の上端だけを元の解像度で撮る (Dynamic Island の確認用)
+shot_top() {
+  sleep "${2:-2}"
+  adb exec-out screencap -p > "$OUT/$1.png"
+  convert "$OUT/$1.png" -crop "x${TOP_H:-320}+0+0" +repage -quality 70 "$OUT/$1.jpg"
+  echo "SHOT_BEGIN $1"
+  base64 -w 0 "$OUT/$1.jpg"
+  echo
+  echo "SHOT_END $1"
+}
+
 dump_texts() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
   adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
@@ -157,7 +171,7 @@ crop_photo_test() {
 
 # 初回起動の準備: インストール、ホームアプリ設定、通知アクセス、初回案内を閉じる
 setup_app() {
-  adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+  adb install -r -g "$APK"
   adb shell cmd package set-home-activity "$PKG/com.aa.launcher.MainActivity" || true
   # 標準ランチャーが起動直後に ANR ダイアログを出して操作を妨げるので無効化する
   adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher > /dev/null 2>&1 || true
@@ -178,6 +192,6 @@ print_logs() {
   echo "=== CRASH BUFFER ==="
   adb logcat -d -b crash
   echo "=== APP LOG ==="
-  adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher.debug.*(Exception|Error)" | grep -v -E "AppsFilter|uiautomator|RuntimeInit|boot image|lock profiling|Shutting down VM" | tail -120
+  adb logcat -d | grep -E "AndroidRuntime|FATAL EXCEPTION|ANR in|System.err|launcher(\.island)?\.debug.*(Exception|Error)" | grep -v -E "AppsFilter|uiautomator|RuntimeInit|boot image|lock profiling|Shutting down VM" | tail -120
   echo "=== END ==="
 }

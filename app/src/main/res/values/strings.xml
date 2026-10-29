@@ -374,4 +374,10 @@
     <string name="sys_accessibility">Accessibility (System)</string>
     <string name="sys_about">About Phone</string>
     <string name="sys_settings">System Settings</string>
+    <!-- Dynamic Island (Island 版) -->
+    <string name="island_play">Play</string>
+    <string name="island_pause">Pause</string>
+    <string name="island_next">Next Track</string>
+    <string name="island_previous">Previous Track</string>
+    <string name="island_unknown_title">Unknown Title</string>
 </resources>

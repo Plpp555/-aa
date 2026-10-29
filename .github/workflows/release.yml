@@ -81,13 +81,14 @@ jobs:
           export RELEASE_KEYSTORE_PATH="$RUNNER_TEMP/release.p12"
           export RELEASE_VERSION="$VERSION"
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          # 今は標準版だけを公開する (Dynamic Island 版はテスト中)
+          ./gradlew --no-daemon assembleStandardRelease
           rm -f "$RUNNER_TEMP/release.p12"
 
       - name: Verify signature and prepare files
         run: |
           APK="LiquidLauncher-$VERSION.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          cp app/build/outputs/apk/standard/release/app-standard-release.apk "$APK"
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
           # 開発用の鍵 (公開されている) で署名されていたら止める

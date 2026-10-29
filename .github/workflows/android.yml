@@ -28,7 +28,8 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+          ls -R app/build/outputs/apk | grep -i "\.apk$"
 
       # minSdk (Android 6.0) より新しい API を分岐なしで呼んでいないか (NewApi) を確認する
       - name: Lint (NewApi)
-        run: ./gradlew --no-daemon lintDebug || { cat app/build/reports/lint-results-debug.txt; exit 1; }
+        run: ./gradlew --no-daemon lintStandardDebug lintIslandDebug || { cat app/build/reports/lint-results-*.txt; exit 1; }

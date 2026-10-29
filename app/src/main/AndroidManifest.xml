@@ -97,7 +97,7 @@
             android:icon="@mipmap/ic_settings"
             android:label="@string/settings_app_name"
             android:roundIcon="@mipmap/ic_settings"
-            android:taskAffinity="com.aa.launcher.settings"
+            android:taskAffinity="${applicationId}.settings"
             android:theme="@style/Theme.Launcher.Settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
