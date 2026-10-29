@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -72,6 +71,7 @@ import com.aa.launcher.ui.common.rememberIconSpec
 import com.aa.launcher.ui.glass.liquidGlass
 import com.aa.launcher.ui.theme.LocalIsDark
 import com.aa.launcher.ui.theme.LocalLauncherSettings
+import androidx.compose.foundation.layout.windowInsetsPadding
 
 /** iOS 18/26/27 の「カスタマイズ」シート: アイコンサイズ・スタイル・色合い・Liquid Glass。 */
 @Composable
@@ -229,7 +229,7 @@ fun EditPagesOverlay(vm: LauncherViewModel) {
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.3f))
                 .clickable(interactionSource = MutableInteractionSource(), indication = null) { vm.editPagesOpen = false }
-                .statusBarsPadding()
+                .windowInsetsPadding(launcherStatusBars())
                 .navigationBarsPadding(),
         ) {
             if (layout != null) {

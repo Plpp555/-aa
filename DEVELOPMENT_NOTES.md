@@ -355,6 +355,13 @@ docs/screenshots.jpg  README 用スクリーンショット
 - **軽さ**: 静止中は何も描き直さない。幅のアニメーションは配置とサイズの計算 (`offset {}` / `layout {}`) だけ、ぽよんは `graphicsLayer` だけで反映し、
   中身を作り直さない。波形の位相は描画の段階でだけ読む (再構成なし)。波形が動くのは再生中かつホーム表示中だけ (他のアプリ使用中は Compose のフレームが止まる)。
   ポップアップの進み具合は開いている間だけ秒の境目ごとに更新。新しい権限はなし (再生中の曲は既存の通知アクセスを使う)。
+- **ステータスバー**: 島を表示中はシステムのステータスバーを隠す (`vm.islandActive` → MainActivity の `applyWindow`、`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`)。
+  ステータスバーの領域のタッチはシステム (SystemUI) が受け取るため、隠さないと島をタップできない (最初の版で確認: ポップアップが開かず、時計やアイコンが島の上に重なった)。
+  代わりに時刻 (分ごと、`rememberNow`) と電池 (% とマーク) を島の左右の空きの中央に自前で描く (`IslandStatusBar`、設定「ステータスバーを表示」がオフなら描かない)。
+  左の空きが 56dp 未満 (カメラ穴が左端) なら時刻も右に並べる。上端からスワイプするとシステムのステータスバーが一時的に出る。
+  ホーム画面の上端の余白は `launcherStatusBars()` (LauncherLocals.kt) で取る: 島の表示中は `statusBarsIgnoringVisibility` (隠していても同じ高さを空ける)、それ以外は従来どおり `statusBars`。
+  電波・Wi-Fi のマークは出していない (権限が増えるため)。
+- カメラ穴がないときの島はステータスバーの高さに収まる大きさ (高さ = ステータスバー − 2dp、26〜34dp、幅は高さの 3.5 倍)。
 - ホーム画面 (このアプリ) の中だけの表示。他のアプリの上に出すには「他のアプリの上に重ねて表示」の権限と常駐が必要になるので行っていない。
 - debug ビルドはログ `LiquidIsland` に位置 (`placed hole=... rect=...`)・表示の切り替え (`mode=...`)・無効 (`disabled ...`) を出す (スモークテストが使う)。
 
@@ -457,6 +464,7 @@ docs/screenshots.jpg  README 用スクリーンショット
 | v1.0.0 | **最初の公開版** (2026-10-29、Release ワークフローの手動実行)。https://github.com/Plpp555/liquid-OS-Android-launcher/releases/tag/v1.0.0 、`LiquidLauncher-1.0.0.apk` (SHA-256 `220a0f9b…a1d1`)、署名証明書は非公開の鍵 (`f5ca2ccb…c6fe`) で、Secrets が正しく登録されていることを確認 |
 | 8267f6c / 4f27674 (PR #4) | リポジトリ名の変更 (`-aa` → `liquid-OS-Android-launcher`) に合わせてリンクを更新。テスト版 (debug) を専用のワークフロー「Android CI (debug)」(android-debug.yml) に分離。Android CI はビルドと lint の確認だけ |
 | (次のコミット) | **Dynamic Island 版 (テスト版)**: product flavor `standard` / `island`、`ui/island/DynamicIsland.kt` (カメラ穴を中心に配置、充電・再生中の音楽、ぽよん、Liquid Glass のポップアップ。タブレット・折りたたみでは出さない)、Island 版のテスト版 Artifact、`smoke_island.sh` と擬似メディア。設定画面の `taskAffinity` をアプリごとに (`${applicationId}.settings`。標準版・Island 版・debug を並べて入れたとき別のアプリの設定が開くのを防ぐ)。Release は標準版だけ |
+| (次のコミット) | Dynamic Island: エミュレータで島をタップできない (ステータスバーの領域のタッチはシステムが受け取る)・時計が島に重なる問題を修正。島の表示中はシステムのステータスバーを隠し、時刻と電池を島の左右に自前で描く。ホームの上端の余白は `launcherStatusBars()` |
 
 ### f753a63 の検証結果 (2026-10-26)
 - 全テスト成功、クラッシュなし。スマホ: 編集画面 (Move and Scale / Cancel / Set) でドラッグした位置がホームの壁紙に反映。

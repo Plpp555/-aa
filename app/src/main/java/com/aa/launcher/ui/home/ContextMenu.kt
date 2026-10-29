@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -114,7 +113,7 @@ fun ContextMenuOverlay(vm: LauncherViewModel) {
 private fun MenuContent(vm: LauncherViewModel, state: ContextMenuState) {
     val bounds = state.bounds
     val density = LocalDensity.current
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = launcherStatusBars().asPaddingValues().calculateTopPadding()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val entries = rememberEntries(vm, state)
 

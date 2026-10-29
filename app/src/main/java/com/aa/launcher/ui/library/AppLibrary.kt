@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -92,13 +91,14 @@ import com.aa.launcher.ui.theme.LocalLauncherSettings
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlinx.coroutines.launch
+import com.aa.launcher.ui.home.launcherStatusBars
 
 private data class LibraryGroup(val title: String, val apps: List<AppEntry>, val locked: Boolean = false, val bigOnly: Boolean = false)
 
 /** App ライブラリ (ホーム画面の右端): カテゴリ別の自動フォルダと一覧/検索。 */
 @Composable
 fun AppLibraryPage(vm: LauncherViewModel, modifier: Modifier = Modifier) {
-    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusTop = launcherStatusBars().asPaddingValues().calculateTopPadding()
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current

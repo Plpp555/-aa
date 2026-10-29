@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -71,13 +72,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -113,8 +117,12 @@ import com.aa.launcher.ui.common.onGlassSecondary
 import com.aa.launcher.ui.glass.liquidGlass
 import com.aa.launcher.ui.today.BatteryInfo
 import com.aa.launcher.ui.today.rememberBattery
+import com.aa.launcher.ui.today.rememberNow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -142,10 +150,17 @@ private val ChargingGreen = Color(0xFF34C759)
  * Dynamic Island (Island 版のみ)。ホーム画面の上部、カメラ穴を中心に黒い島を置き、充電中と再生中の音楽を表示する。
  * - タップ: 再生中の音楽があれば Liquid Glass のポップアップ (曲名・進み具合・操作) を開く。それ以外は「ぽよん」と弾むだけ。
  * - スマホの縦向きだけ。タブレット・折りたたみ端末・横向きでは出さない。
+ * - 表示中はシステムのステータスバーを隠し (島をタップできるように)、時刻と電池を島の左右に描く。
  * - 静止中は何も描き直さない。動くのはタップ・表示の切り替え・再生中の波形 (ホーム表示中のみ) だけ。
  */
 @Composable
-fun DynamicIsland(haptics: Boolean, reduceMotion: Boolean) {
+fun DynamicIsland(
+    haptics: Boolean,
+    reduceMotion: Boolean,
+    showStatusBar: Boolean,
+    darkWallpaper: Boolean,
+    onActiveChange: (Boolean) -> Unit,
+) {
     if (!BuildConfig.DYNAMIC_ISLAND) return
     val context = LocalContext.current
     val config = LocalConfiguration.current
@@ -157,12 +172,18 @@ fun DynamicIsland(haptics: Boolean, reduceMotion: Boolean) {
             if (!supported) Log.d(TAG, "disabled foldable=$foldable sw=${config.smallestScreenWidthDp} orientation=${config.orientation}")
         }
     }
-    if (supported) IslandHost(haptics, reduceMotion)
+    // 表示中はシステムのステータスバーを隠す (MainActivity)。ステータスバーの領域のタッチはシステムが受け取るので、隠さないと島をタップできない
+    val onActive by rememberUpdatedState(onActiveChange)
+    DisposableEffect(supported) {
+        onActive(supported)
+        onDispose { onActive(false) }
+    }
+    if (supported) IslandHost(haptics, reduceMotion, showStatusBar, darkWallpaper)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IslandHost(haptics: Boolean, reduceMotion: Boolean) {
+private fun IslandHost(haptics: Boolean, reduceMotion: Boolean, showStatusBar: Boolean, darkWallpaper: Boolean) {
     val view = LocalView.current
     val density = LocalDensity.current
     val media = LauncherApp.instance.mediaRepository
@@ -250,6 +271,11 @@ private fun IslandHost(haptics: Boolean, reduceMotion: Boolean) {
         val currentMode by rememberUpdatedState(mode)
         val currentHaptics by rememberUpdatedState(haptics)
 
+        // システムのステータスバーの代わりに、島の左右に時刻と電池を描く (iOS と同じ配置)
+        if (showStatusBar) {
+            IslandStatusBar(anchor, leftFor(activeWidth), activeWidth, screenWidth, battery, darkWallpaper)
+        }
+
         // ポップアップの外をタップしたら閉じる
         if (popupOpen) {
             Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { popupOpen = false } })
@@ -333,8 +359,10 @@ private fun computeAnchor(view: View, screenWidth: Int, statusTop: Int, density:
         val baseHeight = 34.dp.toPx()
         val baseWidth = 120.dp.toPx()
         if (hole == null) {
-            val top = ((statusTop - baseHeight) / 2f).coerceAtLeast(6.dp.toPx())
-            return IslandAnchor(screenWidth / 2f, top, baseHeight, baseWidth, null)
+            // カメラ穴がないときはステータスバーの高さに収まる大きさにする (iPhone の島と同じ縦横比)
+            val height = (statusTop - 2.dp.toPx()).coerceIn(26.dp.toPx(), baseHeight)
+            val top = ((statusTop - height) / 2f).coerceAtLeast(1.dp.toPx())
+            return IslandAnchor(screenWidth / 2f, top, height, height * 3.5f, null)
         }
         // カメラ穴を囲む一回り大きい島にする。上端に付いた切り欠き (ノッチ) は上端から伸ばす
         val height = max(baseHeight, hole.height() + 10.dp.toPx())
@@ -366,6 +394,88 @@ private fun IslandContent(mode: IslandMode, nowPlaying: NowPlaying?, battery: Ba
                 }
             }
         }
+    }
+}
+
+/**
+ * システムのステータスバーの代わりの時刻と電池 (島を表示中はシステムのものを隠すため)。島が広がったときの左右の空きの中央に置く。
+ * 左が狭い (カメラ穴が左端にある) ときは時刻も右に並べる。
+ */
+@Composable
+private fun IslandStatusBar(anchor: IslandAnchor, islandLeft: Float, islandWidth: Float, screenWidth: Int, battery: BatteryInfo, darkWallpaper: Boolean) {
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    val color = if (darkWallpaper) Color.White else Color.Black
+    // 分の境目ごとに更新 (ホームが見えていないときは止まる)
+    val now = rememberNow(60_000L)
+    val time = remember(now) {
+        val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
+        SimpleDateFormat(pattern, Locale.getDefault()).format(Date(now))
+    }
+    // 文字の大きさは dp で決める (端末の文字サイズ設定でステータスバーからはみ出さない)
+    val timeSize = with(density) { 15.dp.toSp() }
+    val percentSize = with(density) { 12.dp.toSp() }
+    val minEar = with(density) { 56.dp.toPx() }
+    val rowHeight = with(density) { 24.dp.toPx() }
+    val rowTop = (anchor.top + anchor.height / 2f - rowHeight / 2f).roundToInt()
+    val rightStart = islandLeft + islandWidth
+    val leftEar = islandLeft
+    val rightEar = screenWidth - rightStart
+    val timeOnLeft = leftEar >= minEar
+    if (timeOnLeft) {
+        Box(
+            Modifier
+                .offset { IntOffset(0, rowTop) }
+                .width(with(density) { leftEar.toDp() })
+                .height(with(density) { rowHeight.toDp() }),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(time, color = color, fontSize = timeSize, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+    if (rightEar >= minEar) {
+        Row(
+            Modifier
+                .offset { IntOffset(rightStart.roundToInt(), rowTop) }
+                .width(with(density) { rightEar.toDp() })
+                .height(with(density) { rowHeight.toDp() }),
+            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!timeOnLeft) {
+                Text(time, color = color, fontSize = timeSize, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Spacer(Modifier.width(6.dp))
+            }
+            Text("${battery.level}%", color = color, fontSize = percentSize, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            BatteryGlyph(battery, color, Modifier.size(25.dp, 12.dp))
+        }
+    }
+}
+
+/** iOS 風の電池のマーク。充電中は緑、20% 以下は赤。 */
+@Composable
+private fun BatteryGlyph(battery: BatteryInfo, color: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val stroke = 1.dp.toPx()
+        val nubWidth = 1.5.dp.toPx()
+        val bodyWidth = size.width - nubWidth - stroke
+        val corner = CornerRadius(size.height * 0.3f)
+        val outline = color.copy(alpha = 0.45f)
+        drawRoundRect(outline, Offset(stroke / 2f, stroke / 2f), Size(bodyWidth - stroke, size.height - stroke), corner, style = Stroke(stroke))
+        drawRoundRect(outline, Offset(bodyWidth + stroke / 2f, size.height * 0.32f), Size(nubWidth, size.height * 0.36f), CornerRadius(nubWidth / 2f))
+        val fill = when {
+            battery.charging -> ChargingGreen
+            battery.level <= 20 -> Color(0xFFFF3B30)
+            else -> color
+        }
+        val inset = stroke * 2f
+        val fullWidth = bodyWidth - inset * 2f
+        drawRoundRect(
+            fill,
+            Offset(inset, inset),
+            Size(fullWidth * battery.level.coerceIn(0, 100) / 100f, size.height - inset * 2f),
+            CornerRadius(size.height * 0.18f),
+        )
     }
 }
 

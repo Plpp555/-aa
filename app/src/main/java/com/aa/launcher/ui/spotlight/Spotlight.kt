@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -114,6 +113,8 @@ import com.aa.launcher.ui.theme.LocalIsDark
 import com.aa.launcher.ui.theme.LocalLauncherSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.aa.launcher.ui.home.launcherStatusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 
 /** 設定項目のショートカット (Spotlight の「設定」結果)。 */
 data class SettingShortcut(
@@ -250,7 +251,7 @@ private fun SpotlightContent(vm: LauncherViewModel) {
                 .align(Alignment.TopCenter)
                 .widthIn(max = 640.dp)
                 .fillMaxSize()
-                .statusBarsPadding()
+                .windowInsetsPadding(launcherStatusBars())
                 .navigationBarsPadding()
                 .imePadding(),
         ) {

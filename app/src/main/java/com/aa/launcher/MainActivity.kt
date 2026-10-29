@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -84,16 +85,20 @@ class MainActivity : ComponentActivity() {
         // 壁紙・ステータスバーの表示をウィンドウに反映
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                combine(vm.settings, vm.wallpaper) { s, w -> Triple(s.showStatusBar, w.image == null, w.isDark) }
+                combine(vm.settings, vm.wallpaper, snapshotFlow { vm.islandActive }) { s, w, island ->
+                    WindowLook(s.showStatusBar, w.image == null, w.isDark, island)
+                }
                     .distinctUntilChanged()
-                    .collect { (showStatusBar, showSystemWallpaper, darkWallpaper) ->
-                        applyWindow(showStatusBar, showSystemWallpaper, darkWallpaper)
-                    }
+                    .collect { applyWindow(it) }
             }
         }
     }
 
-    private fun applyWindow(showStatusBar: Boolean, showSystemWallpaper: Boolean, darkWallpaper: Boolean) {
+    /** ウィンドウに反映する表示。[island] は Island 版で Dynamic Island を表示中 (システムのステータスバーを隠す)。 */
+    private data class WindowLook(val showStatusBar: Boolean, val showSystemWallpaper: Boolean, val darkWallpaper: Boolean, val island: Boolean)
+
+    private fun applyWindow(look: WindowLook) {
+        val (showStatusBar, showSystemWallpaper, darkWallpaper, island) = look
         if (showSystemWallpaper) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -103,7 +108,15 @@ class MainActivity : ComponentActivity() {
             window.setBackgroundDrawable(null)
         }
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        if (showStatusBar) controller.show(WindowInsetsCompat.Type.statusBars()) else controller.hide(WindowInsetsCompat.Type.statusBars())
+        if (island) {
+            // ステータスバーの領域のタッチはシステムが受け取るので、隠さないと島をタップできない。
+            // 時刻と電池は島の左右に自前で描く。上端からスワイプすると一時的にシステムのステータスバーが出る
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            if (showStatusBar) controller.show(WindowInsetsCompat.Type.statusBars()) else controller.hide(WindowInsetsCompat.Type.statusBars())
+        }
         controller.isAppearanceLightStatusBars = !darkWallpaper
         controller.isAppearanceLightNavigationBars = !darkWallpaper
     }
